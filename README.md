@@ -46,6 +46,17 @@ cited source or page, and AI-prepared structure requires qualified review
 before legal action. Legal Saathi does not file, send, pay, contact, publish,
 or represent a user.
 
+### Release screenshots
+
+These screenshots were captured from the release serving the original domain.
+They use only signed-out, public, or fictional states.
+
+| English case journey | Hindi case journey |
+|---|---|
+| ![Legal Saathi five-stage case journey in English](docs/screenshots/case-journey-en.png) | ![Legal Saathi five-stage case journey in Hindi](docs/screenshots/case-journey-hi.png) |
+
+![Signed-out Legal Saathi workspace with privacy and availability guidance](docs/screenshots/workspace-signed-out-en.png)
+
 ## Project layout
 
 ```text
