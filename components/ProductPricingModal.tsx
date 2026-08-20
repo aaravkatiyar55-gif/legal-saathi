@@ -1,0 +1,360 @@
+"use client";
+
+import { CalendarDays, Check, Coins, X } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createRazorpayPurchaseOrder,
+  getBackendSession,
+  previewCoupon,
+  ProductCatalog,
+  quoteCustomTopUp,
+  safeInlineBackendMessage,
+  verifyRazorpayOrder,
+} from "@/lib/backendApi";
+import {
+  formatProductPricingCopy,
+  productPricingCopy,
+  productPricingLocale,
+  type ProductPricingCopyKey,
+} from "@/lib/i18n/productPricingCopy";
+import type { AppLanguage } from "@/lib/i18n";
+import { getModalFocusCycleTargetInContainer } from "@/lib/modalFocusTrap";
+import { usePlanState } from "./PlanStateProvider";
+
+type RazorpayResult = { razorpay_order_id?: string; razorpay_payment_id?: string; razorpay_signature?: string };
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on: (name: string, handler: () => void) => void };
+  }
+}
+
+let razorpayScriptPromise: Promise<boolean> | null = null;
+
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve(true);
+  if (razorpayScriptPromise) return razorpayScriptPromise;
+  razorpayScriptPromise = new Promise<boolean>((resolve) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(Boolean(window.Razorpay)), { once: true });
+      existing.addEventListener("error", () => {
+        existing.remove();
+        razorpayScriptPromise = null;
+        resolve(false);
+      }, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(Boolean(window.Razorpay));
+    script.onerror = () => {
+      script.remove();
+      razorpayScriptPromise = null;
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+  return razorpayScriptPromise;
+}
+
+function formatInr(paise: number | null, language: AppLanguage) {
+  if (paise === null) return productPricingCopy(language, "label.adminOnly");
+  return new Intl.NumberFormat(productPricingLocale(language), { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(paise / 100);
+}
+
+function formatNumber(value: number, language: AppLanguage) {
+  return new Intl.NumberFormat(productPricingLocale(language)).format(value);
+}
+
+function planFeatures(plan: ProductCatalog["plans"][number], catalog: ProductCatalog, language: AppLanguage) {
+  const modelNames = plan.allowedModels.map((id) => catalog.models.find((model) => model.id === id)?.name ?? id).join(", ");
+  const webWindow = plan.usageWindows.webSearches.windowMs >= 28 * 24 * 60 * 60 * 1000
+    ? productPricingCopy(language, "window.thirtyDays")
+    : productPricingCopy(language, "window.sevenDays");
+  return [
+    formatProductPricingCopy(language, "feature.includedUnits", { units: formatNumber(plan.includedUnits, language), days: plan.cycleDays }),
+    modelNames
+      ? formatProductPricingCopy(language, "feature.modelAccess", { models: modelNames })
+      : productPricingCopy(language, "feature.noConfiguredModel"),
+    plan.allowsWeb
+      ? formatProductPricingCopy(language, "feature.manualWeb", { count: formatNumber(plan.usageWindows.webSearches.limit, language), window: webWindow })
+      : productPricingCopy(language, "feature.webNotIncluded"),
+  ];
+}
+
+export default function ProductPricingModal({
+  isOpen,
+  mode = "plans",
+  language,
+  onClose,
+  onRequireSignIn,
+}: {
+  isOpen: boolean;
+  mode?: "plans" | "topup";
+  language: AppLanguage;
+  onClose: () => void;
+  onRequireSignIn: () => void;
+}) {
+  const { catalog, planState, loading, error, refresh } = usePlanState();
+  const [couponByPlan, setCouponByPlan] = useState<Record<string, string>>({});
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [transactionReference, setTransactionReference] = useState("");
+  const [customAmountInr, setCustomAmountInr] = useState("100");
+  const [customQuote, setCustomQuote] = useState<{ amountInr: number; amount: number; units: number } | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const copy = (key: ProductPricingCopyKey) => productPricingCopy(language, key);
+  const currentRank = useMemo(() => catalog?.plans.find((plan) => plan.id === planState?.plan.id)?.paid
+    ? catalog.plans.findIndex((plan) => plan.id === planState?.plan.id)
+    : 0, [catalog, planState]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      if (previouslyFocusedElementRef.current?.isConnected) previouslyFocusedElementRef.current.focus();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setNotice("");
+    setTransactionReference("");
+    setBusy(null);
+    setCustomQuote(null);
+  }, [isOpen, mode]);
+
+  if (!isOpen) return null;
+
+  const applyCoupon = async (planId: "plus" | "pro" | "max", selectedBillingCycle: "monthly" | "yearly") => {
+    if (!getBackendSession()) { onRequireSignIn(); return; }
+    const code = couponByPlan[planId]?.trim();
+    if (!code) { setNotice(copy("notice.couponRequired")); return; }
+    setBusy(`${planId}:coupon`);
+    try {
+      const quote = await previewCoupon(planId, selectedBillingCycle, code);
+      setNotice(formatProductPricingCopy(language, "notice.couponApplied", {
+        code: quote.coupon.code,
+        amount: formatInr(quote.finalAmount, language),
+      }));
+    } catch (couponError) {
+      setNotice(safeInlineBackendMessage(couponError, copy("notice.couponFailed")));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const checkout = async (
+    key: string,
+    purchase:
+      | { purchaseType: "plan"; planId: "plus" | "pro" | "max" | "advocate"; billingCycle: "monthly" | "yearly" | "one_time"; couponCode?: string }
+      | { purchaseType: "topup"; packageId: string; customAmountInr?: number },
+    description: string,
+  ) => {
+    if (!getBackendSession()) { onRequireSignIn(); return; }
+    setBusy(key);
+    setNotice(copy("notice.creatingOrder"));
+    setTransactionReference("");
+    try {
+      const order = await createRazorpayPurchaseOrder(purchase);
+      if (order.localTestMode) {
+        setNotice(copy("notice.gatewaySetupRequired"));
+        return;
+      }
+      if (!order.orderId || !order.keyId || !(await loadRazorpay()) || !window.Razorpay) {
+        throw new Error(copy("notice.checkoutLoadFailed"));
+      }
+      setTransactionReference(order.orderId);
+      setNotice(copy("notice.checkoutPending"));
+      const razorpay = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Legal Saathi",
+        description,
+        order_id: order.orderId,
+        theme: { color: "#7c3aed" },
+        modal: { ondismiss: () => { setNotice(copy("notice.checkoutCancelled")); setBusy(null); } },
+        handler: async (result: RazorpayResult) => {
+          try {
+            await verifyRazorpayOrder({
+              razorpayOrderId: result.razorpay_order_id || "",
+              razorpayPaymentId: result.razorpay_payment_id || "",
+              razorpaySignature: result.razorpay_signature || "",
+            });
+            await refresh();
+            setNotice(copy("notice.paymentVerified"));
+          } catch (verifyError) {
+            setNotice(safeInlineBackendMessage(verifyError, copy("notice.verificationFailed")));
+          } finally {
+            setBusy(null);
+          }
+        },
+      });
+      razorpay.on("payment.failed", () => { setNotice(copy("notice.paymentFailed")); setBusy(null); });
+      razorpay.open();
+    } catch (checkoutError) {
+      setNotice(safeInlineBackendMessage(checkoutError, copy("notice.paymentStartFailed")));
+      setBusy(null);
+    }
+  };
+
+  const previewCustomAmount = async () => {
+    if (!getBackendSession()) { onRequireSignIn(); return; }
+    const amountInr = Number(customAmountInr);
+    setBusy("custom:quote");
+    setCustomQuote(null);
+    try {
+      const quote = await quoteCustomTopUp(amountInr);
+      setCustomQuote({ amountInr: quote.amountInr, amount: quote.amount, units: quote.units });
+      setNotice(formatProductPricingCopy(language, "notice.customAmountQuoted", {
+        amount: formatInr(quote.amount, language),
+        units: formatNumber(quote.units, language),
+      }));
+    } catch (quoteError) {
+      setNotice(safeInlineBackendMessage(quoteError, copy("notice.customAmountUnavailable")));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const nextFocus = getModalFocusCycleTargetInContainer(event.currentTarget, document.activeElement, event.shiftKey);
+    if (!nextFocus) return;
+    event.preventDefault();
+    nextFocus.focus();
+  };
+
+  const advocate = catalog?.advocatePrep;
+  return (
+    <div className="modal-overlay" style={{ zIndex: 9999 }} onMouseDown={onClose}>
+      <section className="modal-content pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title" onKeyDown={handleDialogKeyDown} onMouseDown={(event) => event.stopPropagation()}>
+        <header className="pricing-modal-header"><div><span className="case-hub-kicker">{mode === "topup" ? copy("kicker.creditPurchase") : copy("kicker.planAwareWorkspace")}</span><h2 id="pricing-title">{mode === "topup" ? copy("title.addCredits") : copy("title.plans")}</h2><p>{mode === "topup" ? copy("description.addCredits") : copy("description.plans")}</p></div><button ref={closeButtonRef} className="btn" type="button" onClick={onClose} aria-label={mode === "topup" ? copy("aria.closeCredits") : copy("aria.closePricing")}><X size={18} aria-hidden="true" /></button></header>
+        {(notice || error) && <div className="legal-ai-error" role="status" aria-live="polite">{notice || error}{transactionReference ? ` ${formatProductPricingCopy(language, "label.reference", { reference: transactionReference })}` : ""}</div>}
+        {loading && !catalog ? <p className="text-secondary" role="status">{copy("loading.catalog")}</p> : (
+          mode === "plans" ? <>
+          <div className="pricing-cycle-toggle" role="group" aria-label={copy("label.billingCycle")}>
+            <button className={`btn ${billingCycle === "monthly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "monthly"} onClick={() => setBillingCycle("monthly")}>{copy("billing.monthly")}</button>
+            <button className={`btn ${billingCycle === "yearly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "yearly"} onClick={() => setBillingCycle("yearly")}><CalendarDays size={15} aria-hidden="true" /> {copy("billing.annual")}</button>
+          </div>
+          <div className="pricing-grid">
+            {catalog?.plans.map((plan) => {
+              const isCurrent = plan.id === (planState?.plan.id ?? "free");
+              const targetIndex = catalog.plans.findIndex((item) => item.id === plan.id);
+              const isIncluded = !isCurrent && targetIndex <= currentRank;
+              const purchasablePlanId = plan.id === "plus" || plan.id === "pro" || plan.id === "max" ? plan.id : null;
+              const canPurchase = Boolean(purchasablePlanId) && plan.purchasable && !isCurrent && !isIncluded;
+              const selectedPrice = plan.billingPrices[billingCycle];
+              return <Fragment key={plan.id}>
+                {plan.id === "max" && advocate && <article className="pricing-card"><b className="pricing-badge">{copy("badge.caseAddon")}</b><h3>{advocate.name}</h3><strong>{formatProductPricingCopy(language, "price.fromPerCase", { price: formatInr(advocate.pricePaise, language) })}</strong><p>{copy("addon.description")}</p><span><Check size={14} aria-hidden="true" />{copy("addon.feature")}</span><button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void checkout("advocate_prep", { purchaseType: "plan", planId: "advocate", billingCycle: "one_time" }, copy("checkout.advocatePrepDescription"))}>{copy("action.requestAdvocatePrep")}</button></article>}
+                <article className={`pricing-card ${plan.id === "pro" ? "featured" : ""}`}>
+                {plan.id === "pro" && <b className="pricing-badge">{copy("badge.mostUseful")}</b>}
+                <h3>{plan.name}</h3><strong>{formatInr(selectedPrice, language)}{selectedPrice ? billingCycle === "yearly" ? copy("price.perYear") : copy("price.perMonth") : ""}</strong>
+                {billingCycle === "yearly" && plan.annualSavingsPercent > 0 && <small className="pricing-saving">{formatProductPricingCopy(language, "price.annualSaving", { percent: plan.annualSavingsPercent })}</small>}
+                <p>{copy("plan.description")}</p>
+                {planFeatures(plan, catalog, language).map((feature) => <span key={feature}><Check size={14} aria-hidden="true" />{feature}</span>)}
+                {purchasablePlanId && canPurchase && <div className="pricing-coupon"><input className="apple-glass-input" name={`coupon-${purchasablePlanId}`} autoComplete="off" spellCheck={false} aria-label={formatProductPricingCopy(language, "coupon.aria", { plan: plan.name })} value={couponByPlan[purchasablePlanId] || ""} onChange={(event) => setCouponByPlan({ ...couponByPlan, [purchasablePlanId]: event.target.value })} placeholder={formatProductPricingCopy(language, "coupon.placeholder", { cycle: billingCycle === "yearly" ? copy("coupon.annual") : copy("coupon.monthly") })} /><button className="btn" type="button" onClick={() => void applyCoupon(purchasablePlanId, billingCycle)} disabled={busy === `${purchasablePlanId}:coupon`}>{copy("action.apply")}</button></div>}
+                <button className={`btn ${canPurchase ? "btn-primary" : ""}`} type="button" disabled={!canPurchase || busy !== null} onClick={() => purchasablePlanId && canPurchase && void checkout(purchasablePlanId, { purchaseType: "plan", planId: purchasablePlanId, billingCycle, couponCode: couponByPlan[purchasablePlanId] }, formatProductPricingCopy(language, "checkout.planDescription", { plan: plan.name, cycle: billingCycle === "yearly" ? copy("billing.annual") : copy("billing.monthly") }))}>{isCurrent ? copy("button.currentPlan") : isIncluded ? copy("button.includedInCurrentPlan") : canPurchase ? formatProductPricingCopy(language, "button.choosePlan", { plan: plan.name }) : copy("button.unavailable")}</button>
+                </article>
+              </Fragment>;
+            })}
+          </div></> : null
+        )}
+        {mode === "topup" && catalog && planState?.entitlements.topUps && catalog.topUps.length > 0 && (
+          <section className="topup-section">
+            <div>
+              <span className="case-hub-kicker">
+                {planState.topUpMode === "commercial" ? copy("kicker.secureRazorpay") : copy("kicker.testRazorpay")}
+              </span>
+              <h3>{copy("topup.title")}</h3>
+              <p>{copy("topup.description")}</p>
+            </div>
+            <div className="topup-grid">
+              {catalog.topUps.map((item) => {
+                const units = formatNumber(item.units, language);
+                return (
+                  <button
+                    className="topup-option"
+                    type="button"
+                    key={item.id}
+                    disabled={busy !== null}
+                    onClick={() => void checkout(
+                      item.id,
+                      { purchaseType: "topup", packageId: item.id },
+                      formatProductPricingCopy(language, "checkout.topupDescription", { units }),
+                    )}
+                  >
+                    <Coins size={18} aria-hidden="true" />
+                    <strong>{formatProductPricingCopy(language, "label.credits", { units })}</strong>
+                    <span>{formatInr(item.pricePaise, language)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {catalog.customTopUp && (
+              <div className="custom-topup">
+                <div>
+                  <h3>{copy("topup.customTitle")}</h3>
+                  <p>{copy("topup.customDescription")}</p>
+                </div>
+                <label htmlFor="custom-topup-amount">{copy("topup.amount")}</label>
+                <div className="custom-topup-controls">
+                  <input
+                    id="custom-topup-amount"
+                    className="apple-glass-input"
+                    name="custom-topup-amount"
+                    type="number"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    min={catalog.customTopUp.minAmountInr}
+                    max={catalog.customTopUp.maxAmountInr}
+                    step={catalog.customTopUp.amountStepInr}
+                    value={customAmountInr}
+                    onChange={(event) => {
+                      setCustomAmountInr(event.target.value);
+                      setCustomQuote(null);
+                    }}
+                  />
+                  <button className="btn" type="button" disabled={busy !== null} onClick={() => void previewCustomAmount()}>
+                    {busy === "custom:quote" ? copy("action.calculating") : copy("action.calculateCredits")}
+                  </button>
+                </div>
+                {customQuote && (
+                  <div className="custom-topup-quote" role="status" aria-live="polite">
+                    <strong>{formatProductPricingCopy(language, "label.credits", { units: formatNumber(customQuote.units, language) })}</strong>
+                    <span>{formatProductPricingCopy(language, "topup.forAmount", { amount: formatInr(customQuote.amount, language) })}</span>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => void checkout(
+                        "custom",
+                        { purchaseType: "topup", packageId: "custom", customAmountInr: customQuote.amountInr },
+                        formatProductPricingCopy(language, "checkout.customTopupDescription", { units: formatNumber(customQuote.units, language) }),
+                      )}
+                    >
+                      {copy("action.continueCheckout")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+        {mode === "topup" && catalog && (!planState?.entitlements.topUps || catalog.topUps.length === 0) && <section className="topup-unavailable" role="status"><Coins size={24} aria-hidden="true" /><h3>{copy("topup.unavailableTitle")}</h3><p>{copy("topup.unavailableDescription")}</p></section>}
+        <p className="text-secondary">{copy("footer.backendVerification")}</p>
+      </section>
+    </div>
+  );
+}
