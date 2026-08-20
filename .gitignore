@@ -1,6 +1,8 @@
 node_modules/
 backend/node_modules/
+backend/dist/
 .next/
+next-env.d.ts
 .env
 .env.*
 .vercel/
