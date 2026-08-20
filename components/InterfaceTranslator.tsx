@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { translateUiText, type AppLanguage } from "@/lib/i18n";
-import { syncDocumentLanguage } from "@/lib/i18n/appCopy";
+import { languageTag, translateUiText, type AppLanguage } from "@/lib/i18n";
 
 type OriginalValue = { original: string; rendered: string };
 
@@ -56,7 +55,9 @@ export default function InterfaceTranslator({ language }: { language: AppLanguag
     const apply = () => {
       scheduled = false;
       translateTree(root, language);
-      syncDocumentLanguage(language);
+      // Hinglish is Hindi written in Latin script. Exposing that distinction
+      // helps assistive technology choose a better pronunciation model.
+      document.documentElement.lang = languageTag(language);
     };
     const schedule = () => {
       if (!scheduled) {

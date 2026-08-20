@@ -38,8 +38,7 @@ import InterfaceTranslator from "@/components/InterfaceTranslator";
 import HelpModal from "@/components/HelpModal";
 import PlanHeaderControl from "@/components/PlanHeaderControl";
 import { requestPlanStateRefresh } from "@/components/PlanStateProvider";
-import { isAppLanguage, type AppLanguage } from "@/lib/i18n";
-import { appCopy, appLanguageFromSearch, formatAppCopy, type AppCopyKey } from "@/lib/i18n/appCopy";
+import { isAppLanguage, languageTag, type AppLanguage } from "@/lib/i18n";
 import ConsentModal from "@/components/ConsentModal";
 import { compactChatMemory } from "@/lib/chatMemory";
 import { KeyedSerialQueue } from "@/lib/keyedSerialQueue";
@@ -119,7 +118,6 @@ const backendChatToDocument = (chat: BackendChat): DocumentData => {
     uploadedAt: new Date(chat.updatedAt).getTime(),
     chatHistory: memory.recentMessages,
     contextSummary: memory.contextSummary,
-    chatPersistenceStatus: "saved",
     caseId: chat.caseId,
     requestConfiguration: chat.requestConfiguration,
     webEnabled: chat.webEnabled,
@@ -256,9 +254,11 @@ export default function Home() {
   const [isConsentReviewOpen, setIsConsentReviewOpen] = useState(false);
   const [consentRequirements, setConsentRequirements] = useState<ConsentRequirements | null>(null);
   const [language, setLanguage] = useState<AppLanguage>("en");
-  const copy = (key: AppCopyKey) => appCopy(language, key);
-  const formatCopy = (key: AppCopyKey, values: Readonly<Record<string, string | number>>) => formatAppCopy(language, key, values);
   const pendingProtectedActionRef = useRef<ProtectedAction | null>(null);
+
+  useEffect(() => {
+    document.documentElement.lang = languageTag(language);
+  }, [language]);
 
   const closeTransientModals = () => {
     setIsPricingOpen(false);
@@ -297,8 +297,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const languageFromUrl = appLanguageFromSearch(window.location.search);
-    if (languageFromUrl) setLanguage(languageFromUrl);
     if (window.matchMedia("(max-width: 820px)").matches) {
       setIsSidebarOpen(false);
     }
@@ -373,7 +371,7 @@ export default function Home() {
   };
 
   const handleDeleteCase = async (caseItem: CaseData) => {
-    const confirmed = window.confirm(formatCopy("case.moveToTrashConfirm", { caseName: caseItem.name }));
+    const confirmed = window.confirm(`Move “${caseItem.name}” to trash? Its notes and generated analysis will be hidden from your workspace.`);
     if (!confirmed) return;
     setCaseActionError(null);
     try {
@@ -559,7 +557,6 @@ export default function Home() {
   const performWorkspaceStart = async ({ requestId, file, message, requestConfiguration, webEnabled, termsAccepted: acceptedTerms, language: selectedLanguage }: WorkspaceSubmission) => {
     const newDoc = await createDocumentSession(file, message, undefined, undefined, requestConfiguration, webEnabled, acceptedTerms, selectedLanguage, requestId);
     newDoc.webEnabled = webEnabled;
-    newDoc.chatPersistenceStatus = "saving";
     const updatedDocs = [newDoc, ...documents];
 
     setDocuments(updatedDocs);
@@ -570,18 +567,24 @@ export default function Home() {
     const persistChat = () => chatPersistenceQueue.current.run(newDoc.id, async () => {
       await upsertBackendChat(documentToBackendChat(newDoc));
     });
+    const reportPersistenceFailure = () => {
+      dispatchSafeAppError({
+        referenceId: `chat_store_${newDoc.id}`,
+        errorCode: "CHAT_PERSISTENCE_UNAVAILABLE",
+        httpStatus: 503,
+        routeCategory: "ai",
+        feature: "chat",
+        retry: () => {
+          void persistChat().catch(reportPersistenceFailure);
+        },
+      });
+    };
     try {
       await persistChat();
-      setDocuments((current) => current.map((document) => document.id === newDoc.id
-        ? { ...document, chatPersistenceStatus: "saved" }
-        : document));
     } catch {
-      // The answer is already present in the active workspace. Keep the
-      // warning in the conversation instead of replacing it with a generic
-      // modal, and never resubmit the completed AI request automatically.
-      setDocuments((current) => current.map((document) => document.id === newDoc.id
-        ? { ...document, chatPersistenceStatus: "unavailable" }
-        : document));
+      // The answer is already present in the active workspace. Retrying this
+      // path must persist it, never submit the finalized AI request again.
+      queueMicrotask(reportPersistenceFailure);
     }
   };
 
@@ -605,7 +608,7 @@ export default function Home() {
   const handleRenameChat = async (chatId: string) => {
     const current = documents.find((document) => document.id === chatId);
     if (!current) return;
-    const title = window.prompt(copy("chat.renamePrompt"), current.name)?.trim();
+    const title = window.prompt("Rename conversation", current.name)?.trim();
     if (!title || title === current.name) return;
     const result = await updateBackendChat(chatId, { title });
     setDocuments((items) => items.map((document) => document.id === chatId ? backendChatToDocument(result.chat) : document));
@@ -624,7 +627,7 @@ export default function Home() {
 
   const handleDeleteChat = async (chatId: string) => {
     const current = documents.find((document) => document.id === chatId);
-    if (!current || !window.confirm(formatCopy("chat.moveToTrashConfirm", { conversation: current.name }))) return;
+    if (!current || !window.confirm(`Move “${current.name}” to trash?`)) return;
     await deleteBackendChat(chatId);
     setLastDeletedChat(current);
     setDocuments((items) => items.filter((document) => document.id !== chatId));
@@ -786,25 +789,14 @@ export default function Home() {
       ...d,
       chatHistory: memory.recentMessages,
       contextSummary: memory.contextSummary,
-      chatPersistenceStatus: d.caseId ? d.chatPersistenceStatus : "saving",
       uploadedAt: Date.now(),
     } : d);
     setDocuments(updated);
     const changed = updated.find((document) => document.id === docId);
     if (changed && !changed.caseId) {
-      try {
-        await chatPersistenceQueue.current.run(changed.id, async () => {
-          await upsertBackendChat(documentToBackendChat(changed));
-        });
-        setDocuments((current) => current.map((document) => document.id === changed.id
-          ? { ...document, chatPersistenceStatus: "saved" }
-          : document));
-      } catch (error) {
-        setDocuments((current) => current.map((document) => document.id === changed.id
-          ? { ...document, chatPersistenceStatus: "unavailable" }
-          : document));
-        throw error;
-      }
+      await chatPersistenceQueue.current.run(changed.id, async () => {
+        await upsertBackendChat(documentToBackendChat(changed));
+      });
     }
   };
 
@@ -1203,7 +1195,7 @@ export default function Home() {
         <button
           className="sidebar-mobile-backdrop"
           type="button"
-          aria-label={copy("shell.closeNavigation")}
+          aria-label="Close navigation"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -1213,7 +1205,7 @@ export default function Home() {
         {!isCaseWorkspaceOpen && (
           <div className="app-topbar">
             <div className="app-language-control">
-              <label htmlFor="app-language">{copy("shell.language")}</label>
+              <label htmlFor="app-language">Language</label>
               <select id="app-language" value={language} onChange={(event) => handleLanguageChange(event.target.value as AppLanguage)}>
                 <option value="en">English</option>
                 <option value="hinglish">Hinglish</option>
@@ -1235,7 +1227,10 @@ export default function Home() {
                 }}
                 isAdminEligible={isAdminEligible}
               />
-              <PlanHeaderControl language={language} onOpenPlans={() => { setPricingMode("plans"); setIsPricingOpen(true); }} />
+              <PlanHeaderControl
+                language={language}
+                onOpenPlans={() => { setPricingMode("plans"); setIsPricingOpen(true); }}
+              />
             </div>
           </div>
         )}
@@ -1244,8 +1239,8 @@ export default function Home() {
           <button
             className="btn mobile-sidebar-open"
             type="button"
-            aria-label={copy("shell.openNavigation")}
-            title={copy("shell.openNavigation")}
+            aria-label="Open navigation"
+            title="Open navigation"
             onClick={() => setIsSidebarOpen(true)}
             style={{ position: "absolute", top: "1.5rem", left: "1.5rem", zIndex: 50, padding: "0.5rem" }}
           >
@@ -1311,11 +1306,11 @@ export default function Home() {
 
       <CreateCaseModal 
         isOpen={isCreateCaseModalOpen} 
+        language={language}
         onClose={() => setIsCreateCaseModalOpen(false)} 
         onCreateCase={handleCreateCase}
         onViewExistingCases={() => { setIsCreateCaseModalOpen(false); handleOpenCaseHub(); }}
         onUpgrade={() => { setIsCreateCaseModalOpen(false); setPricingMode("plans"); setIsPricingOpen(true); }}
-        language={language}
       />
       <AdminAuthModal 
         isOpen={isAdminAuthOpen} 
@@ -1344,8 +1339,8 @@ export default function Home() {
       />
       <PricingModal
         isOpen={isPricingOpen}
-        mode={pricingMode}
         language={language}
+        mode={pricingMode}
         onClose={() => setIsPricingOpen(false)}
         onRequireSignIn={() => {
           const reopenPlans = () => { setPricingMode("plans"); setIsPricingOpen(true); };

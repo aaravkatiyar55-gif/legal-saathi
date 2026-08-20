@@ -1,7 +1,6 @@
 import { Scale, Shield } from "lucide-react";
-import { useEffect } from "react";
 import { appLanguages, languageLabel, translateUiText, type AppLanguage } from "@/lib/i18n";
-import { appCopy, publicLanguageHref, syncDocumentLanguage } from "@/lib/i18n/appCopy";
+import LegalCaseJourney from "./LegalCaseJourney";
 
 interface RoleSelectionProps {
   onSelectRole: (role: "normal" | "lawyer") => void;
@@ -10,10 +9,6 @@ interface RoleSelectionProps {
 }
 
 export default function RoleSelection({ onSelectRole, language, onLanguageChange }: RoleSelectionProps) {
-  useEffect(() => {
-    syncDocumentLanguage(language);
-  }, [language]);
-
   const handleSelect = (role: "normal" | "lawyer") => {
     onSelectRole(role);
   };
@@ -59,14 +54,15 @@ export default function RoleSelection({ onSelectRole, language, onLanguageChange
           <p>{t("Start with general legal information and prepare questions for a qualified advocate.")}</p>
         </button>
       </div>
+
+      <LegalCaseJourney language={language} />
       
       <footer className="role-selection-footer fade-in" style={{ animationDelay: "0.6s" }}>
         <p>{t("Legal Saathi provides general legal information, not legal representation. Do not share passwords, bank details, or highly sensitive identity information.")}</p>
         <p>{t("For immediate danger or urgent legal action, contact official emergency help or a qualified legal professional.")}</p>
         <nav aria-label={t("Legal information links")}>
-          <a href={publicLanguageHref("/how-it-works", language)}>{appCopy(language, "entry.howItWorks")}</a>
-          <a href={publicLanguageHref("/terms", language)}>{t("Terms")}</a>
-          <a href={publicLanguageHref("/privacy", language)}>{t("Privacy")}</a>
+          <a href="/terms">{t("Terms")}</a>
+          <a href="/privacy">{t("Privacy")}</a>
         </nav>
       </footer>
     </div>

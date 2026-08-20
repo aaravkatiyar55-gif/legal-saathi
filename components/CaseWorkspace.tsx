@@ -282,14 +282,13 @@ export default function CaseWorkspace({
           <div
             ref={annotationSurfaceRef}
             className="case-annotation-text"
-            data-no-i18n
             onMouseUp={handleAnnotationSelection}
           >
             {previewText || selectedDocument.extractedText || t("No selectable text was found.")}
           </div>
           {pendingSelectedText && (
             <div className="case-annotation-composer">
-              <div className="case-annotation-quote" data-no-i18n>&quot;{pendingSelectedText}&quot;</div>
+              <div className="case-annotation-quote">&quot;{pendingSelectedText}&quot;</div>
               <label htmlFor="case-annotation-comment">{t("Comment on this selection")}</label>
               <textarea
                 id="case-annotation-comment"
@@ -316,16 +315,16 @@ export default function CaseWorkspace({
     if (selectedDocument.previewKind === "image" && previewUrl) {
       // Blob URLs are local authenticated previews and cannot use Next image optimization.
       // eslint-disable-next-line @next/next/no-img-element
-      return <img className="case-document-image-preview" src={previewUrl} alt={selectedDocument.name} data-no-i18n />;
+      return <img className="case-document-image-preview" src={previewUrl} alt={selectedDocument.name} />;
     }
 
     if (selectedDocument.previewKind === "pdf" && previewUrl) {
-      return <iframe className="case-document-pdf-preview" src={previewUrl} title={selectedDocument.name} data-no-i18n />;
+      return <iframe className="case-document-pdf-preview" src={previewUrl} title={selectedDocument.name} />;
     }
 
     if (selectedDocument.previewKind === "text") {
       return (
-        <pre className="case-document-text-preview" data-no-i18n>
+        <pre className="case-document-text-preview">
           {previewText || t("No readable text was found in this file.")}
         </pre>
       );
@@ -333,7 +332,7 @@ export default function CaseWorkspace({
 
     if (selectedDocument.previewKind === "spreadsheet") {
       return (
-        <pre className="case-document-text-preview" data-no-i18n>
+        <pre className="case-document-text-preview">
           {previewText || selectedDocument.extractedText || t("No readable spreadsheet cells were found.")}
         </pre>
       );
@@ -342,7 +341,7 @@ export default function CaseWorkspace({
     if (selectedDocument.previewKind === "office") {
       if (previewText || selectedDocument.extractedText) {
         return (
-          <pre className="case-document-text-preview" data-no-i18n>
+          <pre className="case-document-text-preview">
             {previewText || selectedDocument.extractedText}
           </pre>
         );
@@ -694,7 +693,7 @@ export default function CaseWorkspace({
     >
       <aside className="case-workspace-sidebar">
         <div className="case-workspace-brand">
-          <button type="button" className="case-back-btn" onClick={onBackToCases}>
+          <button className="case-back-btn" onClick={onBackToCases}>
             <ArrowLeft size={18} />
             {t("All cases")}
           </button>
@@ -703,8 +702,8 @@ export default function CaseWorkspace({
               <Briefcase size={20} />
             </span>
             <div>
-              <h1 data-no-i18n>{caseData.name}</h1>
-              <p>{t(caseData.typeTag ?? "Case workspace")}</p>
+              <h1>{caseData.name}</h1>
+              <p>{caseData.typeTag ?? t("Case workspace")}</p>
             </div>
           </div>
         </div>
@@ -712,7 +711,7 @@ export default function CaseWorkspace({
         <div className="case-tree">
           <div className="case-tree-root">
             <Folder size={16} />
-            <span data-no-i18n>{caseData.name}</span>
+            <span>{caseData.name}</span>
             <strong>{caseDocs.length}</strong>
           </div>
           <div className="case-tree-branch">
@@ -755,7 +754,7 @@ export default function CaseWorkspace({
                     >
                       {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       {isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
-                      <span>{t(folder.category)}</span>
+                      <span>{folder.category}</span>
                       <strong>{folder.documents.length}</strong>
                     </button>
 
@@ -772,7 +771,7 @@ export default function CaseWorkspace({
                             }}
                           >
                             {getDocumentIcon(document)}
-                            <span data-no-i18n>{document.name}</span>
+                            <span>{document.name}</span>
                           </button>
                         ))}
                       </div>
@@ -812,16 +811,16 @@ export default function CaseWorkspace({
             >
               <option value="auto">{t("Auto-sort to a folder")}</option>
               {LEGAL_DOCUMENT_CATEGORIES.map(category => (
-                <option key={category} value={category}>{t(category)}</option>
+                <option key={category} value={category}>{category}</option>
               ))}
             </select>
           </label>
           <div className="case-upload-actions">
-            <button type="button" className="case-add-file" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+            <button className="case-add-file" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
               {isUploading ? <Loader2 className="spin" size={17} /> : <Upload size={17} />}
               {t("Add files")}
             </button>
-            <button type="button" className="case-add-file secondary" onClick={() => folderInputRef.current?.click()} disabled={isUploading}>
+            <button className="case-add-file secondary" onClick={() => folderInputRef.current?.click()} disabled={isUploading}>
               <FolderPlus size={17} />
               {t("Add folder")}
             </button>
@@ -847,7 +846,7 @@ export default function CaseWorkspace({
         <header className="case-document-header">
           <div>
             <span className="case-workspace-kicker">{t("Document viewer")}</span>
-            <h2>{selectedDocument ? <span data-no-i18n>{selectedDocument.name}</span> : t("Select a document")}</h2>
+            <h2>{selectedDocument ? selectedDocument.name : t("Select a document")}</h2>
           </div>
           {selectedDocument && (
             <span className="case-document-pill">
@@ -941,7 +940,7 @@ export default function CaseWorkspace({
                 {selectedDocument.serverBacked || selectedDocument.serverStorageKey ? t("Encrypted-session server copy") : t("Metadata only")}
               </strong>
               <span>{t("Text extraction")}</span>
-              <strong title={selectedDocument.extractionMessage} data-no-i18n>{getExtractionLabel(selectedDocument)}</strong>
+              <strong title={selectedDocument.extractionMessage}>{getExtractionLabel(selectedDocument)}</strong>
               <span>{t("Folder")}</span>
               <label className="case-category-field">
                 <select
@@ -963,10 +962,10 @@ export default function CaseWorkspace({
                   }}
                 >
                   {LEGAL_DOCUMENT_CATEGORIES.map(category => (
-                    <option key={category} value={category}>{t(category)}</option>
+                    <option key={category} value={category}>{category}</option>
                   ))}
                 </select>
-                <small>{t(getCategorySourceLabel(selectedDocument.categorySource))}</small>
+                <small>{getCategorySourceLabel(selectedDocument.categorySource)}</small>
               </label>
               <span>{t("Conversation entries")}</span>
               <strong>{selectedDocument.chatHistory.length}</strong>
@@ -980,13 +979,21 @@ export default function CaseWorkspace({
             {/* AI analysis pending banner — shown when case was saved before AI enrichment finished */}
             {caseData.preparation ? (
               <div className="case-preparation-snapshot">
-                <p data-no-i18n>{caseData.preparation.summary}</p>
+                <div className="case-preparation-review-notice" role="note">
+                  <strong>{t("Review before relying")}</strong>
+                  <ul>
+                    <li>{t("User-provided details may be incomplete or unverified.")}</li>
+                    <li>{t("Document findings should be checked against the cited page or source.")}</li>
+                    <li>{t("AI-prepared structure needs review by a qualified advocate before legal action.")}</li>
+                  </ul>
+                </div>
+                <p>{caseData.preparation.summary}</p>
                 {[
-                  ["Important facts", caseData.preparation.facts], ["Missing information", caseData.preparation.missingInformation], ["Documents to collect", [t("Keep agreements, notices, receipts, messages, and relevant records together.")]], ["Questions for the other party", [t("What written record supports their position?"), t("Which dates or payments are disputed?")]], ["Questions for an advocate", caseData.preparation.questionsForUser], ["Risks / red flags", caseData.preparation.risks], ["Next-step checklist", [t("Preserve truthful records."), t("Add dates and documents."), t("Discuss urgent points with a licensed advocate.")]]
-                ].map(([label, items]) => Array.isArray(items) && items.length > 0 ? <section key={String(label)}><strong>{t(String(label))}</strong><ul>{items.map((item) => <li key={item} data-no-i18n>{item}</li>)}</ul></section> : null)}
+                  ["Important facts", caseData.preparation.facts], ["Missing information", caseData.preparation.missingInformation], ["Documents to collect", ["Keep agreements, notices, receipts, messages, and relevant records together."]], ["Questions for the other party", ["What written record supports their position?", "Which dates or payments are disputed?"]], ["Questions for an advocate", caseData.preparation.questionsForUser], ["Risks / red flags", caseData.preparation.risks], ["Next-step checklist", ["Preserve truthful records.", "Add dates and documents.", "Discuss urgent points with a licensed advocate."]]
+                ].map(([label, items]) => Array.isArray(items) && items.length > 0 ? <section key={String(label)}><strong>{t(String(label))}</strong><ul>{items.map((item) => <li key={item}>{t(item)}</li>)}</ul></section> : null)}
               </div>
             ) : <p>{t("Add documents, spreadsheets, screenshots, or videos to review them inside this case workspace.")}</p>}
-            <button type="button" className="case-add-file inline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+            <button className="case-add-file inline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
               <Upload size={17} />
               {t("Add files")}
             </button>
@@ -1043,11 +1050,11 @@ export default function CaseWorkspace({
               );
             })}
           </div>
-          {agentFeedback && <p className="case-agent-workbench-status" role="status" data-no-i18n>{agentFeedback}</p>}
+          {agentFeedback && <p className="case-agent-workbench-status" role="status">{agentFeedback}</p>}
           {getAgentResultBlocks(agentResult).map(block => (
             <article className="case-agent-result" key={block.heading}>
-              <h3 data-no-i18n>{block.heading}</h3>
-              <ul>{block.lines.map((line, index) => <li data-no-i18n key={`${block.heading}-${index}`}>{line}</li>)}</ul>
+              <h3>{block.heading}</h3>
+              <ul>{block.lines.map((line, index) => <li key={`${block.heading}-${index}`}>{line}</li>)}</ul>
             </article>
           ))}
         </section>
@@ -1065,7 +1072,7 @@ export default function CaseWorkspace({
               {caseData.conversationHistory?.slice(-6).map((message, index) => (
                 <div key={`${message.role}:${index}`} className={`case-agent-memory-message ${message.role}`}>
                   <strong>{message.role === "assistant" ? t("Legal Saathi") : t("You")}</strong>
-              <p data-no-i18n>{message.text}</p>
+                  <p>{message.text}</p>
                 </div>
               ))}
             </div>
@@ -1104,13 +1111,13 @@ export default function CaseWorkspace({
             </span>
             <strong>
               {questionScope === "case"
-                ? <>{caseDocs.length} {t(caseDocs.length === 1 ? "document" : "documents")} {t("plus conversation memory in")} <span data-no-i18n>{caseData.name}</span></>
-                : selectedDocument ? <span data-no-i18n>{selectedDocument.name}</span> : t("Choose a document from the case tree")}
+                ? `${caseDocs.length} ${t(caseDocs.length === 1 ? "document" : "documents")} ${t("plus conversation memory in")} ${caseData.name}`
+                : selectedDocument?.name ?? t("Choose a document from the case tree")}
             </strong>
             {questionScope === "case" ? (
               <small>{t("Case-wide retrieval enabled")}</small>
             ) : selectedDocument && (
-              <small>{t(selectedDocument.caseCategory ?? "Other")} | {getPreviewLabel(selectedDocument.previewKind)}</small>
+              <small>{selectedDocument.caseCategory ?? "Other"} | {getPreviewLabel(selectedDocument.previewKind)}</small>
             )}
           </div>
         </div>
@@ -1132,8 +1139,8 @@ export default function CaseWorkspace({
                     onClick={() => toggleAnnotationReference(annotation.id)}
                     title={isReferenced ? t("Remove from this question") : t("Reference in this question")}
                   >
-                    <span data-no-i18n>&quot;{annotation.selectedText}&quot;</span>
-                    <strong data-no-i18n>{annotation.comment}</strong>
+                    <span>&quot;{annotation.selectedText}&quot;</span>
+                    <strong>{annotation.comment}</strong>
                     <small>{isReferenced ? t("Referenced in question") : t("Click to reference")}</small>
                   </button>
                 );
@@ -1179,7 +1186,7 @@ export default function CaseWorkspace({
               className="case-dictation-control"
             />
           </div>
-          <button type="submit" className="case-question-submit" disabled={(questionScope === "document" && !selectedDocument) || !question.trim() || isSubmittingQuestion}>
+          <button className="case-question-submit" disabled={(questionScope === "document" && !selectedDocument) || !question.trim() || isSubmittingQuestion}>
             {isSubmittingQuestion ? <Loader2 className="spin" size={17} /> : <Send size={17} />}
             {isSubmittingQuestion ? t("Working with case memory") : t("Ask Case Agent")}
           </button>
@@ -1200,7 +1207,7 @@ export default function CaseWorkspace({
             <ol>
               {activeQuestions.map(documentQuestion => (
                 <li key={documentQuestion.id}>
-                  <p data-no-i18n>{documentQuestion.text}</p>
+                  <p>{documentQuestion.text}</p>
                   <span>
                     {getQuestionStatusLabel(documentQuestion.status)}
                     {documentQuestion.scope === "case"
@@ -1210,10 +1217,10 @@ export default function CaseWorkspace({
                         : ""}
                   </span>
                   {documentQuestion.response && (
-                    <div className="case-question-answer" data-no-i18n>{documentQuestion.response}</div>
+                    <div className="case-question-answer">{documentQuestion.response}</div>
                   )}
                   {documentQuestion.errorMessage && (
-                    <div className="case-question-answer error" data-no-i18n>{documentQuestion.errorMessage}</div>
+                    <div className="case-question-answer error">{documentQuestion.errorMessage}</div>
                   )}
                 </li>
               ))}

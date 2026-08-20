@@ -20,3 +20,7 @@ export function translateUiText(text: string, language: AppLanguage) {
 export function languageLabel(language: AppLanguage) {
   return language === "en" ? "English" : language === "hinglish" ? "Hinglish" : "हिन्दी";
 }
+
+export function languageTag(language: AppLanguage) {
+  return language === "hi" ? "hi" : language === "hinglish" ? "hi-Latn" : "en";
+}

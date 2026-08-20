@@ -29,6 +29,23 @@ Use fictional, non-sensitive examples for testing. A feature shown as
 unavailable is not evidence that the provider, account, document, case, or
 payment workflow is enabled in that environment.
 
+## One matter, one preparation journey
+
+Legal Saathi is designed around continuity rather than a one-shot legal-chat
+answer. Its public case journey explains five connected stages:
+
+1. explain the situation in plain language;
+2. organise dates, parties, questions, and documents in one case record;
+3. identify missing information, contradictions, and evidence to collect;
+4. check the source trail before relying on legal information; and
+5. prepare an editable handoff for a qualified advocate.
+
+The interface keeps a visible review boundary throughout this journey. User
+details may be unverified, document findings should be checked against the
+cited source or page, and AI-prepared structure requires qualified review
+before legal action. Legal Saathi does not file, send, pay, contact, publish,
+or represent a user.
+
 ## Project layout
 
 ```text
@@ -116,6 +133,7 @@ The Express backend is built separately with `npm.cmd run build:backend` and mus
 ## Checks
 
 ```powershell
+npm.cmd exec -- tsx lib/legalCaseJourney.test.ts
 npm.cmd run typecheck
 npm.cmd run lint
 npm.cmd run build
