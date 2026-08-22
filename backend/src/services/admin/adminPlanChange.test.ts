@@ -112,7 +112,7 @@ async function main() {
     console.log("Authoritative admin plan transitions, stale-mirror rejection, top-up preservation, and audit: PASS");
   } finally {
     process.chdir(originalCwd);
-await fs.rm(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await fs.rm(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 

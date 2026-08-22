@@ -1,3 +1,3 @@
-import DataRightsActions from "@/components/DataRightsActions";
 import PublicPolicyPage from "@/components/PublicPolicyPage";
-export default function ExportPage() { return <><PublicPolicyPage page="export" /><div className="public-policy-floating-action"><DataRightsActions action="export" /></div></>; }
+import { exportSections } from "@/lib/policyContent";
+export default function ExportPage() { return <PublicPolicyPage title="Data Export Request" summary="Download an owner-scoped JSON export after signing in." sections={exportSections} dataRightsAction="export" />; }

@@ -1,2 +1,3 @@
 import PublicPolicyPage from "@/components/PublicPolicyPage";
-export default function TermsPage() { return <PublicPolicyPage page="terms" />; }
+import { termsSections } from "@/lib/policyContent";
+export default function TermsPage() { return <PublicPolicyPage title="Terms of Use" summary="Rules for using Legal Saathi lawfully and understanding the limits of AI-assisted legal preparation." sections={termsSections} />; }

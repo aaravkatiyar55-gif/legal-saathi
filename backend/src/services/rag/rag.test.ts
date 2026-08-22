@@ -1,9 +1,13 @@
 import { strict as assert } from "node:assert";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 async function run() {
-  const testRoot = await fs.mkdtemp(path.resolve(process.cwd(), "../security-audit/test-data/rag-pipeline-"));
+  // A clean checkout must not need a repository-local audit directory just to
+  // run an isolated RAG contract test. The operating-system temp area also
+  // keeps synthetic document text outside the worktree.
+  const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "legal-saathi-rag-pipeline-"));
   Object.assign(process.env, {
     NODE_ENV: "test",
     RAG_ENABLED: "true",
@@ -79,7 +83,7 @@ async function run() {
     assert.equal(insufficient.grounding.status, "insufficient");
     console.log("Global curated RAG, 768-d local embeddings, private two-user isolation, deletion, prompt boundary, and abstention: PASS");
   } finally {
-await fs.rm(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await fs.rm(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 

@@ -8,9 +8,7 @@ import {
   supportsThinkingMode
 } from "@/lib/requestSettings";
 import { LegalAiModel, RequestConfiguration, RequestSpeed, ThinkingMode } from "@/lib/types";
-import type { AppLanguage } from "@/lib/i18n";
-import { appCopy, formatAppCopy, type AppCopyKey } from "@/lib/i18n/appCopy";
-import { getAiRequestAvailability } from "@/lib/aiRequestAvailability";
+import { translateUiText, type AppLanguage } from "@/lib/i18n";
 import { usePlanState } from "./PlanStateProvider";
 
 interface RequestControlsProps {
@@ -26,18 +24,10 @@ interface RequestControlsProps {
 const modelOrder: LegalAiModel[] = ["auto", "fast", "flash", "pro", "ultra"];
 const speedOptions: RequestSpeed[] = ["normal", "1.5x", "2x"];
 
-const thinkingLabelKeys: Record<ThinkingMode, AppCopyKey> = {
-  default: "request.default",
-  standard: "request.standard",
-  extended: "request.extended"
-};
-
-const modelDescriptionKeys: Record<LegalAiModel, AppCopyKey> = {
-  auto: "request.modelDescription.auto",
-  fast: "request.modelDescription.fast",
-  flash: "request.modelDescription.flash",
-  pro: "request.modelDescription.pro",
-  ultra: "request.modelDescription.ultra",
+const thinkingLabels: Record<ThinkingMode, string> = {
+  default: "Default",
+  standard: "Standard",
+  extended: "Extended"
 };
 
 const speedLabels: Record<RequestSpeed, string> = {
@@ -57,8 +47,7 @@ export default function RequestControls({
 }: RequestControlsProps) {
   const [quotaMessage, setQuotaMessage] = useState("");
   const { catalog, planState, usage, estimateUnits } = usePlanState();
-  const copy = useCallback((key: AppCopyKey) => appCopy(language, key), [language]);
-  const formatCopy = useCallback((key: AppCopyKey, values: Readonly<Record<string, string | number>>) => formatAppCopy(language, key, values), [language]);
+  const t = useCallback((text: string) => translateUiText(text, language), [language]);
   const activePlan = planState?.plan.id ?? "free";
   const modelCapability = planState?.entitlements.modelCapabilities?.[value.model];
   const advancedThinkingAvailable = activePlan !== "free" && supportsThinkingMode(value.model) && modelCapability?.supportsReasoning === true;
@@ -76,15 +65,14 @@ export default function RequestControls({
     }
     const label = value.model === "pro" || value.model === "ultra"
       ? MODEL_DETAILS[value.model].label
-      : copy("request.chat");
+      : language === "hi" ? "चैट" : "chat";
     const resetTime = new Date(quota.resetAt).toLocaleTimeString(language === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit" });
-    setQuotaMessage(formatCopy("request.quotaStatus", {
-      remaining: quota.remaining,
-      limit: quota.limit,
-      label,
-      resetTime,
-    }));
-  }, [copy, formatCopy, language, usage, value.model]);
+    setQuotaMessage(language === "hi"
+      ? `${quota.remaining}/${quota.limit} ${label} संदेश शेष - ${resetTime} पर रीसेट`
+      : language === "hinglish"
+        ? `${quota.remaining}/${quota.limit} ${label} messages bache hain - ${resetTime} par reset`
+        : `${quota.remaining}/${quota.limit} ${label} messages left - resets ${resetTime}`);
+  }, [language, usage, value.model]);
 
   const catalogPlan = catalog?.plans.find((plan) => plan.id === activePlan);
   const allowedModels = useMemo(
@@ -113,26 +101,25 @@ export default function RequestControls({
       ? configurationState === "available" || configurationState === "provider_temporarily_unavailable"
       : configuredModels.has(model);
     const providerState = model === "auto" ? providerAvailability?.auto : providerAvailability?.explicit;
-    const requestAvailability = getAiRequestAvailability(providerAvailability, model);
-    const isAvailable = allowedModels.has(model) && isConfigured && requestAvailability.available;
+    const isAvailable = allowedModels.has(model) && isConfigured && providerState !== "not_configured";
     const lockLabel = !allowedModels.has(model)
-        ? ` - ${copy("request.lock.upgrade")}`
+        ? ` - ${t("Upgrade required")}`
       : configurationState === "free_model_unavailable"
-        ? ` - ${copy("request.lock.freeUnavailable")}`
+        ? ` - ${t("Free model currently unavailable")}`
         : configurationState === "provider_temporarily_unavailable"
-          ? ` - ${copy("request.lock.providerTemporary")}`
+          ? ` - ${t("Provider temporarily unavailable")}`
           : !isConfigured || providerState === "not_configured"
-            ? ` - ${copy("request.lock.configuration")}`
+            ? ` - ${t("Model configuration required")}`
         : providerState === "payment_required"
-          ? ` - ${copy("request.lock.providerBalance")}`
+          ? ` - ${t("Provider balance required")}`
           : providerState === "rate_limited"
-            ? ` - ${copy("request.lock.rateLimited")}`
+            ? ` - ${t("Rate limited")}`
           : providerState === "unavailable"
-            ? ` - ${copy("request.lock.providerUnavailable")}`
+            ? ` - ${t("Provider unavailable")}`
             : "";
 
     return { model, detail, isAvailable, lockLabel };
-  }), [allowedModels, configuredModels, copy, modelAvailability, providerAvailability]);
+  }), [allowedModels, configuredModels, modelAvailability, providerAvailability, t]);
 
   const estimatedUnits = estimateUnits(value, { webEnabled, contextCharacters });
 
@@ -152,7 +139,7 @@ export default function RequestControls({
     <div className={`request-controls ${className}`.trim()}>
       <div className="request-controls-row">
         <label className="request-control-select">
-          <span>{copy("request.model")}</span>
+          <span>{t("Model")}</span>
           <strong>{MODEL_DETAILS[value.model].label}</strong>
           <ChevronDown size={13} />
           <select
@@ -160,8 +147,8 @@ export default function RequestControls({
             onChange={(event) => updateModel(event.target.value as LegalAiModel)}
             disabled={disabled}
             data-testid="ai-model-selector"
-            aria-label={copy("request.selectModel")}
-            title={copy(modelDescriptionKeys[value.model])}
+            aria-label={t("Select AI model")}
+            title={MODEL_DETAILS[value.model].description}
           >
             {modelOptions.map(({ model, detail, isAvailable, lockLabel }) => (
               <option key={model} value={model} disabled={!isAvailable}>
@@ -172,32 +159,32 @@ export default function RequestControls({
         </label>
 
         <label className="request-control-select">
-          <span>{copy("request.thinking")}</span>
-          <strong>{copy(thinkingLabelKeys[value.thinkingMode])}</strong>
+          <span>{t("Thinking")}</span>
+          <strong>{t(thinkingLabels[value.thinkingMode])}</strong>
           <ChevronDown size={13} />
           <select
             value={value.thinkingMode}
             onChange={(event) => onChange({ ...value, thinkingMode: event.target.value as ThinkingMode })}
             disabled={disabled || availableThinkingModes.length === 1}
-            aria-label={copy("request.selectThinking")}
-            title={copy(availableThinkingModes.length === 1 ? "request.reasoningPlanRequirement" : "request.chooseReasoningDepth")}
+            aria-label={t("Select thinking mode")}
+            title={t(availableThinkingModes.length === 1 ? "Standard and Extended require a paid plan and a configured reasoning model" : "Choose provider reasoning depth")}
           >
             {availableThinkingModes.map((mode) => (
-              <option key={mode} value={mode}>{copy(thinkingLabelKeys[mode])}</option>
+              <option key={mode} value={mode}>{t(thinkingLabels[mode])}</option>
             ))}
           </select>
         </label>
 
         {value.model !== "fast" && (
           <label className="request-control-select">
-            <span>{copy("request.speed")}</span>
+            <span>{t("Speed")}</span>
             <strong>{speedLabels[value.speed]}</strong>
             <ChevronDown size={13} />
             <select
               value={value.speed}
               onChange={(event) => onChange({ ...value, speed: event.target.value as RequestSpeed })}
               disabled={disabled}
-              aria-label={copy("request.selectSpeed")}
+              aria-label={t("Select request speed")}
             >
               {speedOptions.map((speed) => (
                 <option key={speed} value={speed}>{speedLabels[speed]}</option>
@@ -208,11 +195,15 @@ export default function RequestControls({
 
       </div>
       <small className="text-secondary request-controls-note">
-        {formatCopy("request.estimatedCost", { units: estimatedUnits, unitLabel: copy(estimatedUnits === 1 ? "request.unit" : "request.units") })}
-        {value.model === "flash" ? `${copy("request.flashCost")} ` : ""}
-        {value.thinkingMode === "extended" ? `${copy("request.extendedThinkingCost")} ` : ""}
-        {value.speed !== "normal" ? `${copy("request.speedCost")} ` : ""}
-        {webEnabled ? `${copy("request.webCost")} ` : ""}
+        {language === "hi"
+          ? `अनुमानित लागत: ${estimatedUnits} यूनिट। `
+          : language === "hinglish"
+            ? `Estimated cost: ${estimatedUnits} ${estimatedUnits === 1 ? "unit" : "units"}. `
+            : `Estimated cost: ${estimatedUnits} ${estimatedUnits === 1 ? "unit" : "units"}. `}
+        {value.model === "flash" ? (language === "hi" ? "Flash, Fast से अधिक यूनिट उपयोग करता है। " : language === "hinglish" ? "Flash, Fast se zyada units use karta hai. " : "Flash uses more units than Fast. ") : ""}
+        {value.thinkingMode === "extended" ? (language === "hi" ? "विस्तृत सोच धीमी है और अधिक यूनिट उपयोग करती है। " : language === "hinglish" ? "Extended thinking slow hai aur zyada units use karti hai. " : "Extended thinking is slower and uses more units. ") : ""}
+        {value.speed !== "normal" ? (language === "hi" ? "प्रदाता के अनुसार अधिक गति ज़्यादा यूनिट उपयोग कर सकती है या उत्तर की गुणवत्ता घटा सकती है। " : language === "hinglish" ? "Provider ke hisaab se higher speed zyada units use kar sakti hai ya answer quality kam kar sakti hai. " : "Higher speed may use more units or reduce answer quality depending on provider. ") : ""}
+        {webEnabled ? (language === "hi" ? "लाइव वेब खोज वास्तव में चलने पर 2 यूनिट जोड़ती है। " : language === "hinglish" ? "Live Web search sach mein chalne par 2 units add karti hai. " : "Live Web search adds 2 units when a search actually runs. ") : ""}
         {quotaMessage}
       </small>
     </div>

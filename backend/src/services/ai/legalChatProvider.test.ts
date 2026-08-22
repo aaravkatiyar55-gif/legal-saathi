@@ -80,6 +80,25 @@ assert.equal(paidFallback.provider, "openrouter");
 assert.equal(paidFallback.usedPaidFallback, true);
 assert.deepEqual(attemptedModelIds, [autoModel.providerModelId, "synthetic/paid"]);
 
+const freeFallbackAttempts: string[] = [];
+const freeFallback = await runApprovedLegalChat({
+  ...baseInput,
+  resolvedModel: { ...autoModel, freeFallbackModelIds: ["synthetic/free-backup"] },
+}, {
+  openrouter: async ({ resolvedModel }) => {
+    freeFallbackAttempts.push(resolvedModel.providerModelId);
+    if (resolvedModel.providerModelId === autoModel.providerModelId) {
+      throw new OpenRouterApiError({ status: 429, statusText: "Rate Limited", details: "synthetic" });
+    }
+    return success;
+  },
+  mesh: async () => success,
+}, ["openrouter"], { useMockProvider: false });
+assert.equal(freeFallback.provider, "openrouter");
+assert.equal(freeFallback.usedFreeFallback, true);
+assert.equal(freeFallback.usedPaidFallback, undefined);
+assert.deepEqual(freeFallbackAttempts, [autoModel.providerModelId, "synthetic/free-backup"]);
+
 // Once the request-wide deadline has fired, a second provider attempt cannot
 // complete within the caller's budget. It must not start a paid fallback.
 const expiredDeadline = new AbortController();

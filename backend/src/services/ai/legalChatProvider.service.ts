@@ -89,6 +89,12 @@ function canUsePaidOpenRouterFallback(input: Parameters<typeof runApprovedLegalC
   return status === undefined || status === 408 || status === 429 || status === 504 || (status >= 500 && status <= 599);
 }
 
+function canUseFreeOpenRouterFallback(input: Parameters<typeof runApprovedLegalChat>[0], provider: ApprovedAiProvider, error: unknown) {
+  if (input.signal?.aborted || provider !== "openrouter" || input.resolvedModel.selectedClass !== "auto") return false;
+  const status = statusFromError(error);
+  return status === 408 || status === 429 || status === 504 || (status !== undefined && status >= 500 && status <= 599);
+}
+
 function providerOrder(resolvedModel: ResolvedModelRequest) {
   const primary: ApprovedAiProvider = env.aiProvider === "mesh" ? "mesh" : "openrouter";
   // Legal queries must not silently cross to a separate AI processor. Auto
@@ -148,6 +154,35 @@ export async function runApprovedLegalChat(input: {
       const status = statusFromError(error);
       statuses.push(status);
       recordProviderFailure(provider, status);
+      const freeFallbackModelIds = input.resolvedModel.freeFallbackModelIds ?? [];
+      if (canUseFreeOpenRouterFallback(input, provider, error)) {
+        for (const freeFallbackModelId of freeFallbackModelIds.slice(0, 1)) {
+          try {
+            const chat = await runners.openrouter({
+              ...input,
+              resolvedModel: {
+                ...input.resolvedModel,
+                providerModelId: freeFallbackModelId,
+                freeFallbackModelIds: undefined,
+                compatibilityFallback: true,
+              },
+            });
+            recordProviderSuccess("openrouter");
+            return {
+              chat,
+              provider: "openrouter" as const,
+              resolvedModelClass: input.resolvedModel.resolvedClass,
+              attemptedProviders,
+              usedFreeFallback: true,
+            };
+          } catch (fallbackError) {
+            if (fallbackError instanceof AiSafetyBlockError) throw fallbackError;
+            const fallbackStatus = statusFromError(fallbackError);
+            statuses.push(fallbackStatus);
+            recordProviderFailure("openrouter", fallbackStatus);
+          }
+        }
+      }
       const paidFallbackModelId = input.resolvedModel.paidFallbackModelId;
       if (paidFallbackModelId && canUsePaidOpenRouterFallback(input, provider, error)) {
         const paidFallbackInput = {

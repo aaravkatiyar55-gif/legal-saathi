@@ -1,7 +1,9 @@
 import {
   LegalAiModel,
   RequestConfiguration,
-  SubscriptionPlan
+  RequestSpeed,
+  SubscriptionPlan,
+  ThinkingMode
 } from "@/lib/types";
 
 export const DEFAULT_REQUEST_CONFIGURATION: RequestConfiguration = {

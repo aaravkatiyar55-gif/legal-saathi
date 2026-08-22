@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getAnalysisPageWebPresentation } from "./AnalysisPage";
+import { getAnalysisPageChatFailureMessage, getAnalysisPageWebPresentation } from "./AnalysisPage";
 import {
   WEB_RESEARCH_ENVIRONMENT_UNAVAILABLE,
   WEB_RESEARCH_PLAN_STATUS_UNKNOWN,
@@ -32,3 +32,11 @@ assert.equal(available.available, true);
 assert.equal(available.unavailableMessage, undefined);
 
 process.stdout.write("AnalysisPage Web availability tests passed: 15/15\n");
+
+const testRequestId = "12345678-1234-1234-1234-123456789abc";
+assert.match(getAnalysisPageChatFailureMessage("rate_limited", testRequestId, "en"), /AI service is busy/);
+assert.match(getAnalysisPageChatFailureMessage("rate_limited", testRequestId, "hinglish"), /AI service abhi busy/);
+assert.match(getAnalysisPageChatFailureMessage("rate_limited", testRequestId, "hi"), /AI सेवा अभी व्यस्त/u);
+assert.match(getAnalysisPageChatFailureMessage("provider_timeout", testRequestId, "en"), /did not finish in time/);
+assert.match(getAnalysisPageChatFailureMessage("provider_unavailable", testRequestId, "en"), /^$/);
+process.stdout.write("AnalysisPage chat recovery presentation tests passed: 5/5\n");

@@ -3,7 +3,6 @@
 import { Mic, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { AppLanguage } from "@/lib/i18n/types";
-import { getModalFocusCycleTargetInContainer } from "@/lib/modalFocusTrap";
 import { dictationLocale, dictationText, DictationState, joinDictationText, uniqueDictationTranscript } from "@/lib/speechDictation";
 
 interface RecognitionAlternativeLike {
@@ -80,7 +79,6 @@ export default function DictationControl({
   const transcriptRef = useRef("");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acceptButtonRef = useRef<HTMLButtonElement>(null);
-  const disclosureReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const clearTimer = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -169,13 +167,7 @@ export default function DictationControl({
   };
 
   useEffect(() => {
-    if (!showDisclosure) return;
-    disclosureReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusFrame = window.requestAnimationFrame(() => acceptButtonRef.current?.focus());
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      if (disclosureReturnFocusRef.current?.isConnected) disclosureReturnFocusRef.current.focus();
-    };
+    if (showDisclosure) acceptButtonRef.current?.focus();
   }, [showDisclosure]);
 
   useEffect(() => () => {
@@ -185,19 +177,6 @@ export default function DictationControl({
   }, []);
 
   const active = state === "requesting" || state === "listening" || state === "transcribing";
-  const closeDisclosure = () => setShowDisclosure(false);
-  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeDisclosure();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const nextFocus = getModalFocusCycleTargetInContainer(event.currentTarget, document.activeElement, event.shiftKey);
-    if (!nextFocus) return;
-    event.preventDefault();
-    nextFocus.focus();
-  };
 
   return (
     <>
@@ -219,7 +198,7 @@ export default function DictationControl({
               <span className="dictation-pulse" aria-hidden="true" />
               {dictationText(language, state)}
             </span>
-            <button type="button" className="dictation-cancel" onClick={cancel} aria-label={dictationText(language, "cancelAndDiscard")}>
+            <button type="button" className="dictation-cancel" onClick={cancel} aria-label="Cancel dictation and discard its transcript">
               <X size={15} />
             </button>
           </>
@@ -228,21 +207,23 @@ export default function DictationControl({
 
       {showDisclosure && (
         <div className="modal-overlay" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) closeDisclosure();
+          if (event.target === event.currentTarget) setShowDisclosure(false);
         }}>
-          <section className="modal-content dictation-disclosure" role="dialog" aria-modal="true" aria-labelledby="dictation-disclosure-title" onKeyDown={handleDialogKeyDown}>
-            <h2 id="dictation-disclosure-title">{dictationText(language, "disclosureTitle")}</h2>
+          <section className="modal-content dictation-disclosure" role="dialog" aria-modal="true" aria-labelledby="dictation-disclosure-title" onKeyDown={(event) => {
+            if (event.key === "Escape") setShowDisclosure(false);
+          }}>
+            <h2 id="dictation-disclosure-title">Use voice dictation?</h2>
             <p>
-              {dictationText(language, "disclosureBody")}
+              Your browser or its speech vendor may process microphone audio to create text. Legal Saathi does not upload or permanently store audio in this browser dictation mode. Review the Privacy Notice before continuing.
             </p>
-            <p className="dictation-disclosure-note">{dictationText(language, "disclosureNote")}</p>
+            <p className="dictation-disclosure-note">The transcript is inserted into the composer for you to review and edit. It is never sent automatically.</p>
             <div className="dictation-disclosure-actions">
-              <button type="button" className="btn" onClick={closeDisclosure}>{dictationText(language, "disclosureCancel")}</button>
+              <button type="button" className="btn" onClick={() => setShowDisclosure(false)}>Cancel</button>
               <button ref={acceptButtonRef} type="button" className="btn-primary" onClick={() => {
                 setDisclosureAccepted(true);
-                closeDisclosure();
+                setShowDisclosure(false);
                 window.setTimeout(beginRecognition, 0);
-              }}>{dictationText(language, "disclosureContinue")}</button>
+              }}>Continue with microphone</button>
             </div>
           </section>
         </div>

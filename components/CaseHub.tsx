@@ -30,7 +30,7 @@ export default function CaseHub({ cases, documents, onCreateCase, onOpenCase, on
             {t("Open a case workspace to collect documents, keep the matter separate from ordinary chats, and organize the record by legal document type.")}
           </p>
         </div>
-        <button type="button" className="case-hub-create" onClick={onCreateCase}>
+        <button className="case-hub-create" onClick={onCreateCase}>
           <Plus size={18} />
           {t("New Case")}
         </button>
@@ -38,8 +38,8 @@ export default function CaseHub({ cases, documents, onCreateCase, onOpenCase, on
 
       {lastDeletedCase && (
         <div className="legal-ai-error" role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem" }}>
-          <span><span data-no-i18n>{lastDeletedCase.name}</span>{" "}{t("moved to trash. It can be restored during this session.")}</span>
-          <button type="button" className="btn" onClick={onRestoreLastDeleted}><Undo2 size={15} />{t("Restore")}</button>
+          <span>{lastDeletedCase.name} {t("moved to trash. It can be restored during this session.")}</span>
+          <button className="btn" onClick={onRestoreLastDeleted}><Undo2 size={15} />{t("Restore")}</button>
         </div>
       )}
 
@@ -50,7 +50,7 @@ export default function CaseHub({ cases, documents, onCreateCase, onOpenCase, on
           <Briefcase size={30} />
           <h2>{t("No case workspaces yet")}</h2>
           <p>{t("Create a case workspace when a matter needs multiple documents, its own structure, and a separate working area.")}</p>
-          <button type="button" className="case-hub-create" onClick={onCreateCase}>
+          <button className="case-hub-create" onClick={onCreateCase}>
             <Plus size={18} />
             {t("Create Case Workspace")}
           </button>
@@ -67,11 +67,11 @@ export default function CaseHub({ cases, documents, onCreateCase, onOpenCase, on
                   <span className="case-hub-icon" aria-hidden="true">
                     <Briefcase size={19} />
                   </span>
-                  <span className="case-hub-tag">{t(caseItem.typeTag ?? "Case")}</span>
+                  <span className="case-hub-tag">{caseItem.typeTag ?? t("Case")}</span>
                 </div>
-                <h2 data-no-i18n>{caseItem.name}</h2>
-                {caseItem.clientName && <p className="case-hub-client" data-no-i18n>{caseItem.clientName}</p>}
-                {caseItem.description && <p className="case-hub-description" data-no-i18n>{caseItem.description}</p>}
+                <h2>{caseItem.name}</h2>
+                {caseItem.clientName && <p className="case-hub-client">{caseItem.clientName}</p>}
+                {caseItem.description && <p className="case-hub-description">{caseItem.description}</p>}
                 <div className="case-hub-meta">
                   <span>
                     <FileText size={15} />
@@ -82,11 +82,11 @@ export default function CaseHub({ cases, documents, onCreateCase, onOpenCase, on
                   <span>{t("Updated")} {updatedAt}</span>
                 </div>
                 <div style={{ display: "flex", gap: ".6rem" }}>
-                  <button type="button" className="case-hub-open" onClick={() => onOpenCase(caseItem.id)}>
+                  <button className="case-hub-open" onClick={() => onOpenCase(caseItem.id)}>
                     {t("Open workspace")}
                     <ArrowRight size={17} />
                   </button>
-                  <button type="button" className="btn" aria-label={`${t("Delete")} ${caseItem.name}`} title={t("Move case to trash")} onClick={() => onDeleteCase(caseItem)} style={{ color: "#f87171" }}>
+                  <button className="btn" aria-label={`${t("Delete")} ${caseItem.name}`} title={t("Move case to trash")} onClick={() => onDeleteCase(caseItem)} style={{ color: "#f87171" }}>
                     <Trash2 size={16} />
                   </button>
                 </div>

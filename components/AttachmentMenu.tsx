@@ -1,9 +1,8 @@
 "use client";
 
 import { FileText, Folder, Globe2, ImageIcon, Plus, Video } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { translateUiText, type AppLanguage } from "@/lib/i18n";
-import { getMenuFocusIndex } from "@/lib/menuKeyboardNavigation";
 
 type AttachmentMenuProps = {
   disabled?: boolean;
@@ -30,18 +29,10 @@ export default function AttachmentMenu({
 }: AttachmentMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const triggerButtonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const firstActionRef = useRef<HTMLButtonElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const menuId = useId();
   const t = (text: string) => translateUiText(text, language);
-
-  const closeMenu = (restoreFocus = false) => {
-    setOpen(false);
-    if (restoreFocus) window.requestAnimationFrame(() => triggerButtonRef.current?.focus());
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -49,9 +40,14 @@ export default function AttachmentMenu({
     const closeOnOutsideClick = (event: MouseEvent) => {
       if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
     return () => {
       document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
 
@@ -63,22 +59,6 @@ export default function AttachmentMenu({
   const acceptSelection = (input: HTMLInputElement, file?: File) => {
     onSelect(file);
     input.value = "";
-  };
-
-  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeMenu(true);
-      return;
-    }
-
-    const menuItems = Array.from(
-      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"], [role="menuitemcheckbox"]') ?? [],
-    );
-    const nextIndex = getMenuFocusIndex(menuItems, menuItems.indexOf(document.activeElement as HTMLButtonElement), event.key);
-    if (nextIndex === null) return;
-    event.preventDefault();
-    menuItems[nextIndex]?.focus();
   };
 
   return (
@@ -100,13 +80,11 @@ export default function AttachmentMenu({
         onChange={(event) => acceptSelection(event.currentTarget, event.currentTarget.files?.[0])}
       />
       <button
-        ref={triggerButtonRef}
         type="button"
         className={buttonClassName}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
         aria-label={selectedFile
           ? language === "hi" ? `${selectedFile.name} संलग्नक बदलें` : language === "hinglish" ? `${selectedFile.name} attachment badlein` : `Replace attachment ${selectedFile.name}`
           : t("Add attachment")}
@@ -115,7 +93,7 @@ export default function AttachmentMenu({
         <Plus size={20} />
       </button>
       {open && (
-        <div id={menuId} ref={menuRef} className="attachment-menu" role="menu" aria-label={t("Attachment type")} onKeyDown={handleMenuKeyDown}>
+        <div className="attachment-menu" role="menu" aria-label={t("Attachment type")}>
           <button ref={firstActionRef} type="button" role="menuitem" onClick={() => choose(documentInputRef.current)}>
             <FileText size={16} /> {t("Document")}
           </button>
@@ -136,7 +114,7 @@ export default function AttachmentMenu({
             title={t(webAvailable ? "Use live Web sources for this request" : webUnavailableMessage ?? "Live web search is not configured on this environment.")}
             onClick={() => {
               onToggleWeb?.();
-              closeMenu(true);
+              setOpen(false);
             }}
           >
             <Globe2 size={16} />

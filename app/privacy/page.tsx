@@ -1,2 +1,3 @@
 import PublicPolicyPage from "@/components/PublicPolicyPage";
-export default function PrivacyPage() { return <PublicPolicyPage page="privacy" />; }
+import { privacySections } from "@/lib/policyContent";
+export default function PrivacyPage() { return <PublicPolicyPage title="Privacy Notice" summary="How Legal Saathi handles account, case, document, AI, usage, and payment information." sections={privacySections} />; }

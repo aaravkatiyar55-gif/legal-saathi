@@ -1,5 +1,6 @@
 import { BookOpen, Briefcase, FolderOpen, MessageSquare, Search } from "lucide-react";
-import { translateUiText, type AppLanguage } from "@/lib/i18n";
+import type { AppLanguage } from "@/lib/i18n";
+import { caseJourneyStepMessage, entryJourneyMessage } from "@/lib/i18n/entryJourneyMessages";
 
 export const LEGAL_CASE_JOURNEY_STEPS = [
   {
@@ -42,36 +43,37 @@ interface LegalCaseJourneyProps {
 }
 
 export default function LegalCaseJourney({ language }: LegalCaseJourneyProps) {
-  const t = (text: string) => translateUiText(text, language);
+  const copy = (key: Parameters<typeof entryJourneyMessage>[1]) => entryJourneyMessage(language, key);
 
   return (
     <section className="legal-case-journey" aria-labelledby="legal-case-journey-title">
       <div className="legal-case-journey-heading">
-        <span className="legal-case-journey-kicker">{t("A continuous case journey")}</span>
-        <h2 id="legal-case-journey-title">{t("From first explanation to an advocate-ready brief")}</h2>
-        <p>{t("Legal Saathi keeps the work around one matter connected instead of ending at a single chat reply.")}</p>
+        <span className="legal-case-journey-kicker">{copy("journey.kicker")}</span>
+        <h2 id="legal-case-journey-title">{copy("journey.heading")}</h2>
+        <p>{copy("journey.intro")}</p>
       </div>
 
       <ol className="legal-case-journey-steps">
         {LEGAL_CASE_JOURNEY_STEPS.map((step, index) => {
           const Icon = journeyIcons[step.id];
+          const localizedStep = caseJourneyStepMessage(language, step.id);
           return (
             <li key={step.id}>
               <span className="legal-case-journey-marker" aria-hidden="true">
                 <Icon size={18} strokeWidth={1.8} />
                 <span>{String(index + 1).padStart(2, "0")}</span>
               </span>
-              <h3>{t(step.title)}</h3>
-              <p>{t(step.description)}</p>
+              <h3>{localizedStep.title}</h3>
+              <p>{localizedStep.description}</p>
             </li>
           );
         })}
       </ol>
 
-      <ul className="legal-case-journey-guardrails" aria-label={t("Trust boundaries")}>
-        <li>{t("Your facts stay editable")}</li>
-        <li>{t("Sources remain traceable")}</li>
-        <li>{t("Professional review stays in the loop")}</li>
+      <ul className="legal-case-journey-guardrails" aria-label={copy("journey.guardrails")}>
+        <li>{copy("journey.guardrail.editable")}</li>
+        <li>{copy("journey.guardrail.traceable")}</li>
+        <li>{copy("journey.guardrail.review")}</li>
       </ul>
     </section>
   );

@@ -3,10 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import DocumentUpload from "./DocumentUpload";
 import { BackendApiError } from "@/lib/backendApi";
 import { useSafeAppError } from "./AppErrorProvider";
-import type { AppLanguage } from "@/lib/i18n";
-import { caseCreationCopy, caseTypeCopyKeys } from "@/lib/i18n/caseCreationCopy";
-import { getModalFocusCycleTargetInContainer } from "@/lib/modalFocusTrap";
-import { getMenuFocusIndex } from "@/lib/menuKeyboardNavigation";
 
 interface CreateCaseModalProps {
   isOpen: boolean;
@@ -14,10 +10,9 @@ interface CreateCaseModalProps {
   onCreateCase: (name: string, clientName: string, description: string, typeTag: string, file?: File) => boolean | void | Promise<boolean | void>;
   onViewExistingCases: () => void;
   onUpgrade: () => void;
-  language: AppLanguage;
 }
 
-export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewExistingCases, onUpgrade, language }: CreateCaseModalProps) {
+export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewExistingCases, onUpgrade }: CreateCaseModalProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
@@ -28,60 +23,9 @@ export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewE
   const [productError, setProductError] = useState<"case_limit" | "other" | null>(null);
   const [productMessage, setProductMessage] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const caseTypeTriggerRef = useRef<HTMLButtonElement>(null);
-  const caseTypeOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const { showSafeError } = useSafeAppError();
-  const copy = (key: Parameters<typeof caseCreationCopy>[1]) => caseCreationCopy(language, key);
 
   const caseTypes = ["Litigation", "Corporate", "Real Estate", "Intellectual Property", "Other"];
-
-  const focusCaseTypeOption = (index: number) => {
-    window.requestAnimationFrame(() => caseTypeOptionRefs.current[index]?.focus());
-  };
-
-  const closeCaseTypeDropdown = (restoreFocus = false) => {
-    setIsDropdownOpen(false);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => {
-        if (caseTypeTriggerRef.current?.isConnected) caseTypeTriggerRef.current.focus();
-      });
-    }
-  };
-
-  const selectCaseType = (nextType: string) => {
-    setTypeTag(nextType);
-    closeCaseTypeDropdown(true);
-  };
-
-  const handleCaseTypeTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Escape" && isDropdownOpen) {
-      event.preventDefault();
-      closeCaseTypeDropdown(true);
-      return;
-    }
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    setIsDropdownOpen(true);
-    const currentIndex = caseTypes.indexOf(typeTag);
-    const nextIndex = getMenuFocusIndex(caseTypes.map(() => ({})), currentIndex, event.key);
-    focusCaseTypeOption(nextIndex ?? Math.max(0, currentIndex));
-  };
-
-  const handleCaseTypeListboxKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeCaseTypeDropdown(true);
-      return;
-    }
-
-    const optionButtons = caseTypeOptionRefs.current.filter((item): item is HTMLButtonElement => Boolean(item));
-    const nextIndex = getMenuFocusIndex(optionButtons, optionButtons.indexOf(document.activeElement as HTMLButtonElement), event.key);
-    if (nextIndex === null) return;
-    event.preventDefault();
-    optionButtons[nextIndex]?.focus();
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -94,16 +38,6 @@ export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewE
   }, []);
 
   useEffect(() => { if (!isOpen) setIsDropdownOpen(false); }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-    const focusFrame = window.requestAnimationFrame(() => nameInputRef.current?.focus());
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
-    };
-  }, [isOpen]);
 
   const resetAfterSuccess = () => {
     setStep(1);
@@ -147,114 +81,81 @@ export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewE
 
   if (!isOpen) return null;
 
-  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.defaultPrevented) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const nextFocus = getModalFocusCycleTargetInContainer(event.currentTarget, document.activeElement, event.shiftKey);
-    if (!nextFocus) return;
-    event.preventDefault();
-    nextFocus.focus();
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="create-case-title" onKeyDown={handleDialogKeyDown} onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
         {productError === "case_limit" ? (
-          <div className="case-limit-dialog">
-            <h2 id="create-case-title">{copy("limit.title")}</h2>
-            <p>{copy("limit.description")}</p>
+          <div className="case-limit-dialog" role="dialog" aria-labelledby="case-limit-title">
+            <h2 id="case-limit-title">Case-folder limit reached</h2>
+            <p>Your Free plan case-folder limit has been reached.</p>
             <div className="case-limit-actions">
-              <button type="button" className="btn-primary" onClick={onViewExistingCases}>{copy("action.viewExisting")}</button>
-              <button type="button" className="btn" onClick={onViewExistingCases}>{copy("action.deleteOrArchive")}</button>
-              <button type="button" className="btn" onClick={onUpgrade}>{copy("action.upgrade")}</button>
-              <button type="button" className="btn" onClick={() => setProductError(null)}>{copy("action.close")}</button>
+              <button type="button" className="btn-primary" onClick={onViewExistingCases}>View existing cases</button>
+              <button type="button" className="btn" onClick={onViewExistingCases}>Delete or archive an unused case</button>
+              <button type="button" className="btn" onClick={onUpgrade}>Upgrade</button>
+              <button type="button" className="btn" onClick={() => setProductError(null)}>Close</button>
             </div>
           </div>
         ) : (
           <>
-        <h2 id="create-case-title" style={{ marginBottom: "2rem" }}>{step === 1 ? copy("title.create") : copy("title.upload")}</h2>
-        {productError === "other" && <div className="product-condition-message" role="alert" data-no-i18n>{productMessage}</div>}
-        
+        <h2 style={{ marginBottom: "2rem" }}>{step === 1 ? "Create New Case" : "Upload Case Document"}</h2>
+        {productError === "other" && <div className="product-condition-message" role="alert">{productMessage}</div>}
+
         {step === 1 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             <div>
-              <label htmlFor="create-case-name" style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">{copy("field.caseName")}</label>
-              <input 
-                id="create-case-name"
-                ref={nameInputRef}
-                className="apple-glass-input" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                placeholder={copy("placeholder.caseName")}
-                aria-required="true"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="create-case-client" style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">{copy("field.clientName")}</label>
-              <input 
-                id="create-case-client"
-                className="apple-glass-input" 
-                value={clientName} 
-                onChange={(e) => setClientName(e.target.value)} 
-                placeholder={copy("placeholder.optional")}
+              <label style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">Case Name *</label>
+              <input
+                className="apple-glass-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Smith v. Jones"
               />
             </div>
 
             <div>
-              <label id="create-case-type-label" style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">{copy("field.caseType")}</label>
+              <label style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">Client Name</label>
+              <input
+                className="apple-glass-input"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">Case Type</label>
               <div ref={dropdownRef} style={{ position: "relative" }}>
-                <button
-                  ref={caseTypeTriggerRef}
-                  type="button"
-                  className="apple-glass-input" 
-                  onClick={() => {
-                    if (isDropdownOpen) closeCaseTypeDropdown();
-                    else setIsDropdownOpen(true);
-                  }}
-                  onKeyDown={handleCaseTypeTriggerKeyDown}
-                  aria-labelledby="create-case-type-label"
-                  aria-haspopup="listbox"
-                  aria-expanded={isDropdownOpen}
-                  aria-controls="create-case-type-options"
+                <div
+                  className="apple-glass-input"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                   style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  {copy(caseTypeCopyKeys[typeTag as keyof typeof caseTypeCopyKeys])}
+                  {typeTag}
                   <span style={{ fontSize: "0.8rem" }}>▼</span>
-                </button>
+                </div>
                 {isDropdownOpen && (
-                  <div id="create-case-type-options" role="listbox" aria-labelledby="create-case-type-label" onKeyDown={handleCaseTypeListboxKeyDown} style={{
+                  <div style={{
                     position: "absolute",
                     top: "100%",
                     left: 0,
                     right: 0,
                     background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)", 
-                    borderRadius: "var(--radius-md)", 
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius-md)",
                     marginTop: "0.5rem",
                     zIndex: 10,
                     overflow: "hidden"
                   }}>
-                    {caseTypes.map((type, index) => (
-                      <button
-                        ref={(element) => { caseTypeOptionRefs.current[index] = element; }}
-                        type="button"
-                        key={type} 
-                        role="option"
-                        aria-selected={typeTag === type}
-                        tabIndex={typeTag === type ? 0 : -1}
-                        onClick={() => selectCaseType(type)}
-                        style={{ display: "block", width: "100%", padding: "0.75rem 1rem", cursor: "pointer", border: 0, borderBottom: "1px solid var(--border-default)", color: "inherit", font: "inherit", textAlign: "left", background: "transparent" }}
+                    {caseTypes.map(type => (
+                      <div
+                        key={type}
+                        onClick={() => { setTypeTag(type); setIsDropdownOpen(false); }}
+                        style={{ padding: "0.75rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border-default)" }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                       >
-                        {copy(caseTypeCopyKeys[type as keyof typeof caseTypeCopyKeys])}
-                      </button>
+                        {type}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -262,51 +163,47 @@ export default function CreateCaseModal({ isOpen, onClose, onCreateCase, onViewE
             </div>
 
             <div>
-              <label htmlFor="create-case-description" style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">{copy("field.description")}</label>
-              <textarea 
-                id="create-case-description"
-                className="apple-glass-input" 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)} 
-                placeholder={copy("placeholder.notes")}
+              <label style={{ display: "block", marginBottom: "0.5rem" }} className="text-secondary">Description</label>
+              <textarea
+                className="apple-glass-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional notes"
                 style={{ resize: "vertical", minHeight: "80px" }}
               />
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1rem" }}>
-              <button type="button" className="btn" onClick={onClose} style={{ borderRadius: "var(--radius-full)" }}>{copy("action.cancel")}</button>
+              <button className="btn" onClick={onClose} style={{ borderRadius: "var(--radius-full)" }}>Cancel</button>
               <button
-                type="button"
-                className="btn btn-primary" 
-                onClick={() => setStep(2)} 
+                className="btn btn-primary"
+                onClick={() => setStep(2)}
                 disabled={!name.trim()}
                 style={{ borderRadius: "var(--radius-full)", opacity: !name.trim() ? 0.5 : 1 }}
               >
-                {copy("action.nextAddFile")}
+                Next: Add a file
               </button>
             </div>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-            <DocumentUpload 
-              headline={copy("upload.headline")}
-              subtext={copy("upload.subtext")}
-              language={language}
+            <DocumentUpload
+              headline="Upload Document"
+              subtext="The case folder is saved first. Document processing and AI preparation run separately."
               onUpload={(file) => {
                 void submitCase(file);
               }}
             />
-            
+
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
-              <button type="button" className="btn" onClick={() => setStep(1)} style={{ borderRadius: "var(--radius-full)" }}>{copy("action.back")}</button>
+              <button className="btn" onClick={() => setStep(1)} style={{ borderRadius: "var(--radius-full)" }}>Back</button>
               <button
-                type="button"
-                className="btn btn-primary" 
+                className="btn btn-primary"
                 onClick={() => { void submitCase(); }}
                 disabled={submitting}
                 style={{ borderRadius: "var(--radius-full)" }}
               >
-                {copy("action.skipCreateEmpty")}
+                Skip & Create Empty
               </button>
             </div>
           </div>

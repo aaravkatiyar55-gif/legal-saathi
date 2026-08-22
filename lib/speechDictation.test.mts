@@ -13,15 +13,12 @@ assert.equal(uniqueDictationTranscript("final words", "final words"), "final wor
 assert.equal(uniqueDictationTranscript("first words", "first words next"), "first words next");
 assert.match(dictationText("hi", "permission"), /माइक्रोफ़ोन/u);
 assert.match(dictationText("hinglish", "noSpeech"), /speech/i);
-assert.match(dictationText("hi", "disclosureTitle"), /बोलकर/u);
-assert.notEqual(dictationText("hinglish", "disclosureTitle"), dictationText("en", "disclosureTitle"));
 
 const source = readFileSync(new URL("../components/DictationControl.tsx", import.meta.url), "utf8");
 assert.match(source, /SpeechRecognition/);
 assert.match(source, /60_000/);
 assert.match(source, /recognitionRef\.current\?\.abort/);
 assert.ok(!/MediaRecorder|fetch\(|localStorage|sessionStorage/.test(source));
-assert.match(source, /dictationText\(language, "disclosureNote"\)/);
-assert.match(source, /dictationText\(language, "cancelAndDiscard"\)/);
+assert.match(source, /It is never sent automatically/);
 
-console.log("Dictation locales, text preservation, timeout, cleanup, localized disclosure, and no-upload contract: PASS");
+console.log("Dictation locales, text preservation, timeout, cleanup, disclosure, and no-upload contract: PASS");

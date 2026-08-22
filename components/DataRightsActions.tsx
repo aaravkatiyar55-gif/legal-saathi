@@ -1,26 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { downloadBackendDataExport, requestBackendAccountDeletion, safeInlineBackendMessage } from "@/lib/backendApi";
 import { translateUiText, type AppLanguage } from "@/lib/i18n";
-import { appCopy, appLanguageChangeEvent, currentDocumentAppLanguage } from "@/lib/i18n/appCopy";
 
-export default function DataRightsActions({ action }: { action: "export" | "deletion" }) {
+export default function DataRightsActions({ action, language = "en" }: { action: "export" | "deletion"; language?: AppLanguage }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [language, setLanguage] = useState<AppLanguage>(() => currentDocumentAppLanguage());
-  const copy = (key: Parameters<typeof appCopy>[1]) => appCopy(language, key);
-
-  useEffect(() => {
-    const onLanguageChange = (event: Event) => {
-      const nextLanguage = (event as CustomEvent<AppLanguage>).detail;
-      setLanguage(nextLanguage ?? currentDocumentAppLanguage());
-    };
-    setLanguage(currentDocumentAppLanguage());
-    document.addEventListener(appLanguageChangeEvent, onLanguageChange);
-    return () => document.removeEventListener(appLanguageChangeEvent, onLanguageChange);
-  }, []);
-
+  const t = (text: string) => translateUiText(text, language);
   const run = async () => {
     setBusy(true);
     setStatus("");
@@ -33,16 +20,16 @@ export default function DataRightsActions({ action }: { action: "export" | "dele
         anchor.download = `legal-sathi-export-${new Date().toISOString().slice(0, 10)}.json`;
         anchor.click();
         URL.revokeObjectURL(url);
-        setStatus(copy("dataRights.exportPrepared"));
+        setStatus(t("Your owner-scoped export was prepared."));
       } else {
         await requestBackendAccountDeletion();
-        setStatus(copy("dataRights.deletionRecorded"));
+        setStatus(t("Your deletion request was recorded for verified review."));
       }
     } catch (error) {
-      setStatus(translateUiText(safeInlineBackendMessage(error, copy("dataRights.failure")), language));
+      setStatus(safeInlineBackendMessage(error, t("This request could not be completed.")));
     } finally {
       setBusy(false);
     }
   };
-  return <div className="data-rights-action"><button className="btn btn-primary" type="button" disabled={busy} onClick={() => void run()}>{busy ? copy("dataRights.submitting") : action === "export" ? copy("dataRights.download") : copy("dataRights.requestDeletion")}</button>{status && <p role="status">{status}</p>}</div>;
+  return <div className="data-rights-action"><button className="btn btn-primary" type="button" disabled={busy} onClick={() => void run()}>{busy ? t("Submitting...") : action === "export" ? t("Download my data") : t("Request account deletion")}</button>{status && <p role="status">{status}</p>}</div>;
 }

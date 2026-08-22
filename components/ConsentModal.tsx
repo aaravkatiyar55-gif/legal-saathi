@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FileText, X } from "lucide-react";
 
 import {
@@ -12,8 +12,7 @@ import {
   type ConsentHistoryEvent,
   type ConsentRequirements,
 } from "@/lib/backendApi";
-import { translateUiText, type AppLanguage } from "@/lib/i18n";
-import { appCopy, formatAppCopy, type AppCopyKey } from "@/lib/i18n/appCopy";
+import type { AppLanguage } from "@/lib/i18n";
 
 interface ConsentModalProps {
   isOpen: boolean;
@@ -40,7 +39,6 @@ export default function ConsentModal({
   onRefuse,
   onConsentAccepted,
 }: ConsentModalProps) {
-  const copy = useCallback((key: AppCopyKey) => appCopy(language, key), [language]);
   const [accepted, setAccepted] = useState(false);
   const [expanded, setExpanded] = useState(reviewOnly);
   const [loading, setLoading] = useState(false);
@@ -69,10 +67,10 @@ export default function ConsentModal({
         if (active) setPolicy(result.policy);
       })
       .catch(() => {
-        if (active) setPolicyError(copy("consent.policyLoadFailure"));
+        if (active) setPolicyError("The current Terms could not be loaded. Check your connection and try again.");
       });
     return () => { active = false; };
-  }, [copy, isOpen, reviewOnly, requirements.termsVersion, requirements.privacyVersion, requirements.consentVersion]);
+  }, [isOpen, reviewOnly, requirements.termsVersion, requirements.privacyVersion, requirements.consentVersion]);
 
   useEffect(() => {
     if (!isOpen || !reviewOnly) return;
@@ -83,10 +81,10 @@ export default function ConsentModal({
         if (active) setHistory(result.events);
       })
       .catch(() => {
-        if (active) setHistoryError(copy("consent.historyUnavailable"));
+        if (active) setHistoryError("Consent history could not be loaded right now.");
       });
     return () => { active = false; };
-  }, [copy, isOpen, reviewOnly]);
+  }, [isOpen, reviewOnly]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -145,11 +143,11 @@ export default function ConsentModal({
 
   const handleAccept = async () => {
     if (!accepted) {
-      setError(copy("consent.acceptanceRequired"));
+      setError("Select the acceptance checkbox before continuing.");
       return;
     }
     if (!policy || !versionsMatch) {
-      setError(copy("consent.policyNotReady"));
+      setError("The current Terms are not ready yet. Reload them before continuing.");
       return;
     }
     if (loading) return;
@@ -164,8 +162,8 @@ export default function ConsentModal({
       await onConsentAccepted?.(result.consentedAt);
     } catch (acceptError) {
       setError(
-        translateUiText(safeInlineBackendMessage(acceptError, copy("consent.recordFailure"))
-        || copy("consent.recordFailure"), language),
+        safeInlineBackendMessage(acceptError, "Consent could not be recorded. Please try again.")
+        || "Consent could not be recorded. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -179,7 +177,7 @@ export default function ConsentModal({
     try {
       await onRefuse();
     } catch {
-      setError(copy("consent.signOutFailure"));
+      setError("We couldn't sign you out. You remain signed in. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -197,19 +195,15 @@ export default function ConsentModal({
         tabIndex={-1}
       >
         {reviewOnly && onClose && (
-          <button className="consent-close" type="button" onClick={onClose} aria-label={copy("consent.closeReview")}>
+          <button className="consent-close" type="button" onClick={onClose} aria-label="Close consent review">
             <X size={18} />
           </button>
         )}
 
         <div className="consent-icon" aria-hidden="true"><FileText size={21} /></div>
-        <h2 id="consent-title">{reviewOnly ? copy("consent.yourConsent") : copy("consent.termsPrivacy")}</h2>
-        <p
-          id="consent-description"
-          className="text-secondary consent-summary"
-          data-no-i18n={Boolean(policy?.summary)}
-        >
-          {policy?.summary ?? copy("consent.summary")}
+        <h2 id="consent-title">{reviewOnly ? "Your consent" : "Terms and Privacy"}</h2>
+        <p id="consent-description" className="text-secondary consent-summary">
+          {policy?.summary ?? "Review the Terms, Privacy Policy, AI-assisted legal-information limitations, account and data-processing rules, and payment/refund terms."}
         </p>
 
         <button
@@ -220,20 +214,20 @@ export default function ConsentModal({
           onClick={() => setExpanded((current) => !current)}
           disabled={!policy}
         >
-          <span>{expanded ? copy("consent.hideDetails") : copy("consent.viewMore")}</span>
+          <span>{expanded ? "Hide details" : "View more"}</span>
           <ChevronDown size={17} aria-hidden="true" className={expanded ? "is-expanded" : ""} />
         </button>
 
         {policyError && <div className="consent-inline-error" role="alert">{policyError}</div>}
-        {!policy && !policyError && <div className="consent-loading" role="status">{copy("consent.loadingPolicy")}</div>}
+        {!policy && !policyError && <div className="consent-loading" role="status">Loading the current policy...</div>}
 
         {expanded && policy && (
-          <div id="consent-full-policy" className="consent-full-policy" tabIndex={0} data-no-i18n>
+          <div id="consent-full-policy" className="consent-full-policy" tabIndex={0}>
             {[policy.terms, policy.privacy].map((document) => (
               <article key={document.id} className="consent-document">
                 <header>
                   <h3>{document.title}</h3>
-                  <p>{formatAppCopy(language, "consent.versionEffective", { version: document.version, date: document.effectiveDate })}</p>
+                  <p>Version {document.version} | Effective {document.effectiveDate}</p>
                 </header>
                 {document.sections.map((section) => (
                   <section key={`${document.id}-${section.heading}`}>
@@ -247,11 +241,7 @@ export default function ConsentModal({
         )}
 
         <p className="consent-version">
-          {formatAppCopy(language, "consent.versionSummary", {
-            terms: requirements.termsVersion,
-            privacy: requirements.privacyVersion,
-            consent: requirements.consentVersion,
-          })}
+          Terms {requirements.termsVersion} | Privacy {requirements.privacyVersion} | Consent {requirements.consentVersion}
         </p>
 
         {!reviewOnly && (
@@ -266,27 +256,24 @@ export default function ConsentModal({
                 }}
               />
               <span>
-                {copy("consent.acceptStatement")}
+                I accept the Terms and Conditions, Privacy Policy, AI-assisted legal-information limitations,
+                account and data-processing rules, and applicable payment/refund terms.
               </span>
             </label>
-            {!accepted && <p className="consent-instruction">{copy("consent.selectAcceptance")}</p>}
+            {!accepted && <p className="consent-instruction">Select the checkbox to enable Accept and continue.</p>}
           </>
         )}
 
         {reviewOnly && (
           <section aria-labelledby="consent-history-title" className="consent-history">
-            <h3 id="consent-history-title">{copy("consent.historyTitle")}</h3>
+            <h3 id="consent-history-title">Acceptance history</h3>
             {historyError && <div className="consent-inline-error" role="alert">{historyError}</div>}
-            {!historyError && history.length === 0 && <p className="text-secondary">{copy("consent.noHistory")}</p>}
+            {!historyError && history.length === 0 && <p className="text-secondary">No server-side acceptance record is available.</p>}
             {history.map((event) => (
               <div key={event.id} className="consent-history-event">
-                <strong>{isCurrentHistoryEvent(event, requirements) ? copy("consent.currentAcceptance") : copy("consent.previousAcceptance")}</strong>
-                <span>{new Date(event.acceptedAt).toLocaleString(language === "hi" ? "hi-IN" : "en-IN")}</span>
-                <span>{formatAppCopy(language, "consent.versionSummary", {
-                  terms: event.termsVersion,
-                  privacy: event.privacyVersion,
-                  consent: event.consentVersion,
-                })}</span>
+                <strong>{isCurrentHistoryEvent(event, requirements) ? "Current policy acceptance" : "Previous policy acceptance"}</strong>
+                <span>{new Date(event.acceptedAt).toLocaleString("en-IN")}</span>
+                <span>Terms {event.termsVersion} | Privacy {event.privacyVersion} | Consent {event.consentVersion}</span>
               </div>
             ))}
           </section>
@@ -296,7 +283,7 @@ export default function ConsentModal({
 
         <div className="consent-actions">
           {reviewOnly ? (
-            <button className="btn-primary consent-accept" type="button" onClick={onClose}>{copy("consent.close")}</button>
+            <button className="btn-primary consent-accept" type="button" onClick={onClose}>Close</button>
           ) : (
             <>
               <button
@@ -305,10 +292,10 @@ export default function ConsentModal({
                 onClick={() => void handleAccept()}
                 disabled={loading || !accepted || !policy || !versionsMatch}
               >
-                {loading ? copy("consent.saving") : copy("consent.acceptContinue")}
+                {loading ? "Saving acceptance..." : "Accept and continue"}
               </button>
               <button className="consent-refuse" type="button" onClick={() => void handleRefuse()} disabled={loading}>
-                {copy("consent.refuseLogout")}
+                Refuse and log out
               </button>
             </>
           )}

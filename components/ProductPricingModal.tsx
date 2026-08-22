@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Check, Coins, X } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   createRazorpayPurchaseOrder,
   getBackendSession,
@@ -11,14 +11,6 @@ import {
   safeInlineBackendMessage,
   verifyRazorpayOrder,
 } from "@/lib/backendApi";
-import {
-  formatProductPricingCopy,
-  productPricingCopy,
-  productPricingLocale,
-  type ProductPricingCopyKey,
-} from "@/lib/i18n/productPricingCopy";
-import type { AppLanguage } from "@/lib/i18n";
-import { getModalFocusCycleTargetInContainer } from "@/lib/modalFocusTrap";
 import { usePlanState } from "./PlanStateProvider";
 
 type RazorpayResult = { razorpay_order_id?: string; razorpay_payment_id?: string; razorpay_signature?: string };
@@ -29,7 +21,6 @@ declare global {
 }
 
 let razorpayScriptPromise: Promise<boolean> | null = null;
-
 function loadRazorpay() {
   if (window.Razorpay) return Promise.resolve(true);
   if (razorpayScriptPromise) return razorpayScriptPromise;
@@ -58,41 +49,30 @@ function loadRazorpay() {
   return razorpayScriptPromise;
 }
 
-function formatInr(paise: number | null, language: AppLanguage) {
-  if (paise === null) return productPricingCopy(language, "label.adminOnly");
-  return new Intl.NumberFormat(productPricingLocale(language), { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(paise / 100);
+function formatInr(paise: number | null) {
+  if (paise === null) return "Admin only";
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(paise / 100);
 }
 
-function formatNumber(value: number, language: AppLanguage) {
-  return new Intl.NumberFormat(productPricingLocale(language)).format(value);
-}
-
-function planFeatures(plan: ProductCatalog["plans"][number], catalog: ProductCatalog, language: AppLanguage) {
+function planFeatures(plan: ProductCatalog["plans"][number], catalog: ProductCatalog) {
   const modelNames = plan.allowedModels.map((id) => catalog.models.find((model) => model.id === id)?.name ?? id).join(", ");
-  const webWindow = plan.usageWindows.webSearches.windowMs >= 28 * 24 * 60 * 60 * 1000
-    ? productPricingCopy(language, "window.thirtyDays")
-    : productPricingCopy(language, "window.sevenDays");
   return [
-    formatProductPricingCopy(language, "feature.includedUnits", { units: formatNumber(plan.includedUnits, language), days: plan.cycleDays }),
-    modelNames
-      ? formatProductPricingCopy(language, "feature.modelAccess", { models: modelNames })
-      : productPricingCopy(language, "feature.noConfiguredModel"),
-    plan.allowsWeb
-      ? formatProductPricingCopy(language, "feature.manualWeb", { count: formatNumber(plan.usageWindows.webSearches.limit, language), window: webWindow })
-      : productPricingCopy(language, "feature.webNotIncluded"),
+    `${plan.includedUnits.toLocaleString("en-IN")} included units / ${plan.cycleDays} days`,
+    `${modelNames || "No configured model"} access`,
+                  plan.allowsWeb
+                    ? `${plan.usageWindows.webSearches.limit} manual Web searches / ${plan.usageWindows.webSearches.windowMs >= 28 * 24 * 60 * 60 * 1000 ? "30 days" : "7 days"} when configured`
+                    : "Web search not included",
   ];
 }
 
 export default function ProductPricingModal({
   isOpen,
   mode = "plans",
-  language,
   onClose,
   onRequireSignIn,
 }: {
   isOpen: boolean;
   mode?: "plans" | "topup";
-  language: AppLanguage;
   onClose: () => void;
   onRequireSignIn: () => void;
 }) {
@@ -104,22 +84,9 @@ export default function ProductPricingModal({
   const [transactionReference, setTransactionReference] = useState("");
   const [customAmountInr, setCustomAmountInr] = useState("100");
   const [customQuote, setCustomQuote] = useState<{ amountInr: number; amount: number; units: number } | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
-  const copy = (key: ProductPricingCopyKey) => productPricingCopy(language, key);
   const currentRank = useMemo(() => catalog?.plans.find((plan) => plan.id === planState?.plan.id)?.paid
     ? catalog.plans.findIndex((plan) => plan.id === planState?.plan.id)
     : 0, [catalog, planState]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      if (previouslyFocusedElementRef.current?.isConnected) previouslyFocusedElementRef.current.focus();
-    };
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -134,16 +101,13 @@ export default function ProductPricingModal({
   const applyCoupon = async (planId: "plus" | "pro" | "max", selectedBillingCycle: "monthly" | "yearly") => {
     if (!getBackendSession()) { onRequireSignIn(); return; }
     const code = couponByPlan[planId]?.trim();
-    if (!code) { setNotice(copy("notice.couponRequired")); return; }
+    if (!code) { setNotice("Enter a coupon code first."); return; }
     setBusy(`${planId}:coupon`);
     try {
       const quote = await previewCoupon(planId, selectedBillingCycle, code);
-      setNotice(formatProductPricingCopy(language, "notice.couponApplied", {
-        code: quote.coupon.code,
-        amount: formatInr(quote.finalAmount, language),
-      }));
+      setNotice(`${quote.coupon.code} applied. Backend quote: ${formatInr(quote.finalAmount)}.`);
     } catch (couponError) {
-      setNotice(safeInlineBackendMessage(couponError, copy("notice.couponFailed")));
+      setNotice(safeInlineBackendMessage(couponError, "Coupon could not be applied."));
     } finally {
       setBusy(null);
     }
@@ -158,19 +122,19 @@ export default function ProductPricingModal({
   ) => {
     if (!getBackendSession()) { onRequireSignIn(); return; }
     setBusy(key);
-    setNotice(copy("notice.creatingOrder"));
+    setNotice("Creating a secure backend order...");
     setTransactionReference("");
     try {
       const order = await createRazorpayPurchaseOrder(purchase);
       if (order.localTestMode) {
-        setNotice(copy("notice.gatewaySetupRequired"));
+        setNotice("Payment gateway setup is required. No plan or units were granted.");
         return;
       }
       if (!order.orderId || !order.keyId || !(await loadRazorpay()) || !window.Razorpay) {
-        throw new Error(copy("notice.checkoutLoadFailed"));
+        throw new Error("Razorpay Checkout could not be loaded. No plan or units were granted.");
       }
       setTransactionReference(order.orderId);
-      setNotice(copy("notice.checkoutPending"));
+      setNotice("Checkout pending. Access changes only after backend verification.");
       const razorpay = new window.Razorpay({
         key: order.keyId,
         amount: order.amount,
@@ -179,7 +143,7 @@ export default function ProductPricingModal({
         description,
         order_id: order.orderId,
         theme: { color: "#7c3aed" },
-        modal: { ondismiss: () => { setNotice(copy("notice.checkoutCancelled")); setBusy(null); } },
+        modal: { ondismiss: () => { setNotice("Checkout cancelled. No plan or units were granted."); setBusy(null); } },
         handler: async (result: RazorpayResult) => {
           try {
             await verifyRazorpayOrder({
@@ -188,18 +152,18 @@ export default function ProductPricingModal({
               razorpaySignature: result.razorpay_signature || "",
             });
             await refresh();
-            setNotice(copy("notice.paymentVerified"));
+            setNotice("Payment verified by the backend. Your plan state is refreshed.");
           } catch (verifyError) {
-            setNotice(safeInlineBackendMessage(verifyError, copy("notice.verificationFailed")));
+            setNotice(safeInlineBackendMessage(verifyError, "Verification failed. No access was granted."));
           } finally {
             setBusy(null);
           }
         },
       });
-      razorpay.on("payment.failed", () => { setNotice(copy("notice.paymentFailed")); setBusy(null); });
+      razorpay.on("payment.failed", () => { setNotice("Payment failed. No plan or units were granted."); setBusy(null); });
       razorpay.open();
     } catch (checkoutError) {
-      setNotice(safeInlineBackendMessage(checkoutError, copy("notice.paymentStartFailed")));
+      setNotice(safeInlineBackendMessage(checkoutError, "Payment could not start."));
       setBusy(null);
     }
   };
@@ -212,41 +176,25 @@ export default function ProductPricingModal({
     try {
       const quote = await quoteCustomTopUp(amountInr);
       setCustomQuote({ amountInr: quote.amountInr, amount: quote.amount, units: quote.units });
-      setNotice(formatProductPricingCopy(language, "notice.customAmountQuoted", {
-        amount: formatInr(quote.amount, language),
-        units: formatNumber(quote.units, language),
-      }));
+      setNotice(`${formatInr(quote.amount)} adds ${quote.units.toLocaleString("en-IN")} credits after verified payment.`);
     } catch (quoteError) {
-      setNotice(safeInlineBackendMessage(quoteError, copy("notice.customAmountUnavailable")));
+      setNotice(safeInlineBackendMessage(quoteError, "That custom amount is not available."));
     } finally {
       setBusy(null);
     }
   };
 
-  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const nextFocus = getModalFocusCycleTargetInContainer(event.currentTarget, document.activeElement, event.shiftKey);
-    if (!nextFocus) return;
-    event.preventDefault();
-    nextFocus.focus();
-  };
-
   const advocate = catalog?.advocatePrep;
   return (
     <div className="modal-overlay" style={{ zIndex: 9999 }} onMouseDown={onClose}>
-      <section className="modal-content pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title" onKeyDown={handleDialogKeyDown} onMouseDown={(event) => event.stopPropagation()}>
-        <header className="pricing-modal-header"><div><span className="case-hub-kicker">{mode === "topup" ? copy("kicker.creditPurchase") : copy("kicker.planAwareWorkspace")}</span><h2 id="pricing-title">{mode === "topup" ? copy("title.addCredits") : copy("title.plans")}</h2><p>{mode === "topup" ? copy("description.addCredits") : copy("description.plans")}</p></div><button ref={closeButtonRef} className="btn" type="button" onClick={onClose} aria-label={mode === "topup" ? copy("aria.closeCredits") : copy("aria.closePricing")}><X size={18} aria-hidden="true" /></button></header>
-        {(notice || error) && <div className="legal-ai-error" role="status" aria-live="polite">{notice || error}{transactionReference ? ` ${formatProductPricingCopy(language, "label.reference", { reference: transactionReference })}` : ""}</div>}
-        {loading && !catalog ? <p className="text-secondary" role="status">{copy("loading.catalog")}</p> : (
+      <section className="modal-content pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="pricing-modal-header"><div><span className="case-hub-kicker">{mode === "topup" ? "Secure credit purchase" : "Plan-aware workspace"}</span><h2 id="pricing-title">{mode === "topup" ? "Add credits" : "Legal Saathi plans"}</h2><p>{mode === "topup" ? "Choose a credit pack. Credits are granted only after backend payment verification." : "Backend prices, monthly or annual billing, and verified access."}</p></div><button className="btn" type="button" onClick={onClose} aria-label={mode === "topup" ? "Close Add Credits" : "Close pricing"}><X size={18} /></button></header>
+        {(notice || error) && <div className="legal-ai-error" role="status">{notice || error}{transactionReference ? ` Reference: ${transactionReference}` : ""}</div>}
+        {loading && !catalog ? <p className="text-secondary">Loading secure plan catalog...</p> : (
           mode === "plans" ? <>
-          <div className="pricing-cycle-toggle" role="group" aria-label={copy("label.billingCycle")}>
-            <button className={`btn ${billingCycle === "monthly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "monthly"} onClick={() => setBillingCycle("monthly")}>{copy("billing.monthly")}</button>
-            <button className={`btn ${billingCycle === "yearly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "yearly"} onClick={() => setBillingCycle("yearly")}><CalendarDays size={15} aria-hidden="true" /> {copy("billing.annual")}</button>
+          <div className="pricing-cycle-toggle" role="group" aria-label="Billing cycle">
+            <button className={`btn ${billingCycle === "monthly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "monthly"} onClick={() => setBillingCycle("monthly")}>Monthly</button>
+            <button className={`btn ${billingCycle === "yearly" ? "btn-primary" : ""}`} type="button" aria-pressed={billingCycle === "yearly"} onClick={() => setBillingCycle("yearly")}><CalendarDays size={15} /> Annual</button>
           </div>
           <div className="pricing-grid">
             {catalog?.plans.map((plan) => {
@@ -257,103 +205,23 @@ export default function ProductPricingModal({
               const canPurchase = Boolean(purchasablePlanId) && plan.purchasable && !isCurrent && !isIncluded;
               const selectedPrice = plan.billingPrices[billingCycle];
               return <Fragment key={plan.id}>
-                {plan.id === "max" && advocate && <article className="pricing-card"><b className="pricing-badge">{copy("badge.caseAddon")}</b><h3>{advocate.name}</h3><strong>{formatProductPricingCopy(language, "price.fromPerCase", { price: formatInr(advocate.pricePaise, language) })}</strong><p>{copy("addon.description")}</p><span><Check size={14} aria-hidden="true" />{copy("addon.feature")}</span><button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void checkout("advocate_prep", { purchaseType: "plan", planId: "advocate", billingCycle: "one_time" }, copy("checkout.advocatePrepDescription"))}>{copy("action.requestAdvocatePrep")}</button></article>}
+                {plan.id === "max" && advocate && <article className="pricing-card"><b className="pricing-badge">Case add-on</b><h3>{advocate.name}</h3><strong>From {formatInr(advocate.pricePaise)} / case</strong><p>A separate case add-on. It does not replace or grant the Max plan.</p><span><Check size={14} />Case-specific advocate preparation workflow</span><button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void checkout("advocate_prep", { purchaseType: "plan", planId: "advocate", billingCycle: "one_time" }, "Advocate Prep add-on")}>Request Advocate Prep</button></article>}
                 <article className={`pricing-card ${plan.id === "pro" ? "featured" : ""}`}>
-                {plan.id === "pro" && <b className="pricing-badge">{copy("badge.mostUseful")}</b>}
-                <h3>{plan.name}</h3><strong>{formatInr(selectedPrice, language)}{selectedPrice ? billingCycle === "yearly" ? copy("price.perYear") : copy("price.perMonth") : ""}</strong>
-                {billingCycle === "yearly" && plan.annualSavingsPercent > 0 && <small className="pricing-saving">{formatProductPricingCopy(language, "price.annualSaving", { percent: plan.annualSavingsPercent })}</small>}
-                <p>{copy("plan.description")}</p>
-                {planFeatures(plan, catalog, language).map((feature) => <span key={feature}><Check size={14} aria-hidden="true" />{feature}</span>)}
-                {purchasablePlanId && canPurchase && <div className="pricing-coupon"><input className="apple-glass-input" name={`coupon-${purchasablePlanId}`} autoComplete="off" spellCheck={false} aria-label={formatProductPricingCopy(language, "coupon.aria", { plan: plan.name })} value={couponByPlan[purchasablePlanId] || ""} onChange={(event) => setCouponByPlan({ ...couponByPlan, [purchasablePlanId]: event.target.value })} placeholder={formatProductPricingCopy(language, "coupon.placeholder", { cycle: billingCycle === "yearly" ? copy("coupon.annual") : copy("coupon.monthly") })} /><button className="btn" type="button" onClick={() => void applyCoupon(purchasablePlanId, billingCycle)} disabled={busy === `${purchasablePlanId}:coupon`}>{copy("action.apply")}</button></div>}
-                <button className={`btn ${canPurchase ? "btn-primary" : ""}`} type="button" disabled={!canPurchase || busy !== null} onClick={() => purchasablePlanId && canPurchase && void checkout(purchasablePlanId, { purchaseType: "plan", planId: purchasablePlanId, billingCycle, couponCode: couponByPlan[purchasablePlanId] }, formatProductPricingCopy(language, "checkout.planDescription", { plan: plan.name, cycle: billingCycle === "yearly" ? copy("billing.annual") : copy("billing.monthly") }))}>{isCurrent ? copy("button.currentPlan") : isIncluded ? copy("button.includedInCurrentPlan") : canPurchase ? formatProductPricingCopy(language, "button.choosePlan", { plan: plan.name }) : copy("button.unavailable")}</button>
+                {plan.id === "pro" && <b className="pricing-badge">Most useful</b>}
+                <h3>{plan.name}</h3><strong>{formatInr(selectedPrice)}{selectedPrice ? billingCycle === "yearly" ? " / year" : " / month" : ""}</strong>
+                {billingCycle === "yearly" && plan.annualSavingsPercent > 0 && <small className="pricing-saving">Save {plan.annualSavingsPercent}% with annual billing</small>}
+                <p>Backend-enforced plan and model access. Administrator access is separate.</p>
+                {planFeatures(plan, catalog).map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}
+                {purchasablePlanId && canPurchase && <div className="pricing-coupon"><input className="apple-glass-input" value={couponByPlan[purchasablePlanId] || ""} onChange={(event) => setCouponByPlan({ ...couponByPlan, [purchasablePlanId]: event.target.value })} placeholder={`Coupon for ${billingCycle === "yearly" ? "annual" : "monthly"}`} /><button className="btn" type="button" onClick={() => void applyCoupon(purchasablePlanId, billingCycle)} disabled={busy === `${purchasablePlanId}:coupon`}>Apply</button></div>}
+                <button className={`btn ${canPurchase ? "btn-primary" : ""}`} type="button" disabled={!canPurchase || busy !== null} onClick={() => purchasablePlanId && canPurchase && void checkout(purchasablePlanId, { purchaseType: "plan", planId: purchasablePlanId, billingCycle, couponCode: couponByPlan[purchasablePlanId] }, `Legal Saathi ${plan.name} ${billingCycle === "yearly" ? "annual" : "monthly"}`)}>{isCurrent ? "Current plan" : isIncluded ? "Included in current plan" : canPurchase ? `Choose ${plan.name}` : "Unavailable"}</button>
                 </article>
               </Fragment>;
             })}
           </div></> : null
         )}
-        {mode === "topup" && catalog && planState?.entitlements.topUps && catalog.topUps.length > 0 && (
-          <section className="topup-section">
-            <div>
-              <span className="case-hub-kicker">
-                {planState.topUpMode === "commercial" ? copy("kicker.secureRazorpay") : copy("kicker.testRazorpay")}
-              </span>
-              <h3>{copy("topup.title")}</h3>
-              <p>{copy("topup.description")}</p>
-            </div>
-            <div className="topup-grid">
-              {catalog.topUps.map((item) => {
-                const units = formatNumber(item.units, language);
-                return (
-                  <button
-                    className="topup-option"
-                    type="button"
-                    key={item.id}
-                    disabled={busy !== null}
-                    onClick={() => void checkout(
-                      item.id,
-                      { purchaseType: "topup", packageId: item.id },
-                      formatProductPricingCopy(language, "checkout.topupDescription", { units }),
-                    )}
-                  >
-                    <Coins size={18} aria-hidden="true" />
-                    <strong>{formatProductPricingCopy(language, "label.credits", { units })}</strong>
-                    <span>{formatInr(item.pricePaise, language)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {catalog.customTopUp && (
-              <div className="custom-topup">
-                <div>
-                  <h3>{copy("topup.customTitle")}</h3>
-                  <p>{copy("topup.customDescription")}</p>
-                </div>
-                <label htmlFor="custom-topup-amount">{copy("topup.amount")}</label>
-                <div className="custom-topup-controls">
-                  <input
-                    id="custom-topup-amount"
-                    className="apple-glass-input"
-                    name="custom-topup-amount"
-                    type="number"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    min={catalog.customTopUp.minAmountInr}
-                    max={catalog.customTopUp.maxAmountInr}
-                    step={catalog.customTopUp.amountStepInr}
-                    value={customAmountInr}
-                    onChange={(event) => {
-                      setCustomAmountInr(event.target.value);
-                      setCustomQuote(null);
-                    }}
-                  />
-                  <button className="btn" type="button" disabled={busy !== null} onClick={() => void previewCustomAmount()}>
-                    {busy === "custom:quote" ? copy("action.calculating") : copy("action.calculateCredits")}
-                  </button>
-                </div>
-                {customQuote && (
-                  <div className="custom-topup-quote" role="status" aria-live="polite">
-                    <strong>{formatProductPricingCopy(language, "label.credits", { units: formatNumber(customQuote.units, language) })}</strong>
-                    <span>{formatProductPricingCopy(language, "topup.forAmount", { amount: formatInr(customQuote.amount, language) })}</span>
-                    <button
-                      className="btn btn-primary"
-                      type="button"
-                      disabled={busy !== null}
-                      onClick={() => void checkout(
-                        "custom",
-                        { purchaseType: "topup", packageId: "custom", customAmountInr: customQuote.amountInr },
-                        formatProductPricingCopy(language, "checkout.customTopupDescription", { units: formatNumber(customQuote.units, language) }),
-                      )}
-                    >
-                      {copy("action.continueCheckout")}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-        {mode === "topup" && catalog && (!planState?.entitlements.topUps || catalog.topUps.length === 0) && <section className="topup-unavailable" role="status"><Coins size={24} aria-hidden="true" /><h3>{copy("topup.unavailableTitle")}</h3><p>{copy("topup.unavailableDescription")}</p></section>}
-        <p className="text-secondary">{copy("footer.backendVerification")}</p>
+        {mode === "topup" && catalog && planState?.entitlements.topUps && catalog.topUps.length > 0 && <section className="topup-section"><div><span className="case-hub-kicker">{planState.topUpMode === "commercial" ? "Secure Razorpay checkout" : "Razorpay test checkout"}</span><h3>Choose a credit pack</h3><p>No credits are granted before the backend verifies the order owner, amount, currency, signature, and payment state.</p></div><div className="topup-grid">{catalog.topUps.map((item) => <button className="topup-option" type="button" key={item.id} disabled={busy !== null} onClick={() => void checkout(item.id, { purchaseType: "topup", packageId: item.id }, `${item.units.toLocaleString("en-IN")} Legal Saathi credits`)}><Coins size={18} /><strong>{item.units.toLocaleString("en-IN")} credits</strong><span>{formatInr(item.pricePaise)}</span></button>)}</div>{catalog.customTopUp && <div className="custom-topup"><div><h3>Choose your amount</h3><p>Enter a whole INR amount. The backend decides the exact credits before checkout.</p></div><label htmlFor="custom-topup-amount">Amount in INR</label><div className="custom-topup-controls"><input id="custom-topup-amount" className="apple-glass-input" type="number" inputMode="numeric" min={catalog.customTopUp.minAmountInr} max={catalog.customTopUp.maxAmountInr} step={catalog.customTopUp.amountStepInr} value={customAmountInr} onChange={(event) => { setCustomAmountInr(event.target.value); setCustomQuote(null); }} /><button className="btn" type="button" disabled={busy !== null} onClick={() => void previewCustomAmount()}>{busy === "custom:quote" ? "Calculating..." : "Calculate credits"}</button></div>{customQuote && <div className="custom-topup-quote" role="status"><strong>{customQuote.units.toLocaleString("en-IN")} credits</strong><span>for {formatInr(customQuote.amount)}</span><button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void checkout("custom", { purchaseType: "topup", packageId: "custom", customAmountInr: customQuote.amountInr }, `${customQuote.units.toLocaleString("en-IN")} custom Legal Saathi credits`)}>Continue to secure checkout</button></div>}</div>}</section>}
+        {mode === "topup" && catalog && (!planState?.entitlements.topUps || catalog.topUps.length === 0) && <section className="topup-unavailable" role="status"><Coins size={24} /><h3>Add Credits is not enabled in this environment</h3><p>The button no longer redirects to subscriptions. Credit packs appear here only when the backend confirms a controlled Razorpay test or commercially approved checkout.</p></section>}
+        <p className="text-secondary">No frontend click grants access. The backend verifies ownership, amount, currency, coupon, signature, and payment replay before changing plan state.</p>
       </section>
     </div>
   );

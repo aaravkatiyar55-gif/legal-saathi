@@ -7,13 +7,13 @@ const source = readFileSync(new URL("../components/ConsentModal.tsx", import.met
 test("mandatory consent uses exactly one unchecked checkbox contract", () => {
   assert.equal((source.match(/type="checkbox"/g) ?? []).length, 1);
   assert.match(source, /useState\(false\)/);
-  assert.match(source, /copy\("consent\.acceptContinue"\)/);
-  assert.match(source, /copy\("consent\.refuseLogout"\)/);
+  assert.match(source, /Accept and continue/);
+  assert.match(source, /Refuse and log out/);
 });
 
 test("full policy remains explicitly discoverable", () => {
-  assert.match(source, /copy\("consent\.viewMore"\)/);
+  assert.match(source, /View more/);
   assert.match(source, /getBackendConsentDocument/);
-  assert.match(source, /copy\("consent\.acceptStatement"\)/);
-  assert.match(source, /data-no-i18n/);
+  assert.match(source, /Terms and Conditions/);
+  assert.match(source, /Privacy Policy/);
 });

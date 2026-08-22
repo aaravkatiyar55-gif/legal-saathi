@@ -5,7 +5,7 @@ import { autoResizeTextarea } from "@/lib/autoResizeTextarea";
 import {
   DEFAULT_REQUEST_CONFIGURATION
 } from "@/lib/requestSettings";
-import { BackendApiError, cancelLegalChat, chatFailureMessage, getWebSearchStatus, safeInlineBackendMessage, submitLegalChat } from "@/lib/backendApi";
+import { BackendApiError, cancelLegalChat, getWebSearchStatus, safeInlineBackendMessage, submitLegalChat } from "@/lib/backendApi";
 import { useEffect, useRef, useState } from "react";
 import ProgressOverlay from "./ProgressOverlay";
 import RequestControls from "./RequestControls";
@@ -14,10 +14,7 @@ import DictationControl from "./DictationControl";
 import { useSafeAppError } from "./AppErrorProvider";
 import AttachmentMenu from "./AttachmentMenu";
 import { translateUiText } from "@/lib/i18n";
-import { appCopy } from "@/lib/i18n/appCopy";
-import { canRefreshAiRequestStatus, getAiRequestAvailability } from "@/lib/aiRequestAvailability";
 import { getWebResearchAvailability, getWebResearchAvailabilityMessage } from "@/lib/webResearchAvailability";
-import { chatMemoryPersistenceNotice } from "@/lib/chatMemory";
 
 type PendingChatRequest = {
   requestId: string;
@@ -42,6 +39,27 @@ export function getAnalysisPageWebPresentation(
   };
 }
 
+export function getAnalysisPageChatFailureMessage(
+  kind: BackendApiError["kind"],
+  requestId: string,
+  language: "en" | "hinglish" | "hi",
+) {
+  const message = kind === "rate_limited"
+    ? language === "hi"
+      ? "AI सेवा अभी व्यस्त है। आपका संदेश सुरक्षित है; थोड़ी देर बाद फिर से प्रयास करें।"
+      : language === "hinglish"
+        ? "AI service abhi busy hai. Aapka message safe hai; thodi der baad dobara try karein."
+        : "The AI service is busy right now. Your message is safe; please try again shortly."
+    : kind === "provider_timeout"
+      ? language === "hi"
+        ? "AI उत्तर समय पर पूरा नहीं कर पाया। आपका संदेश सुरक्षित है; कृपया फिर से प्रयास करें।"
+        : language === "hinglish"
+          ? "AI answer time par complete nahi kar paaya. Aapka message safe hai; dobara try karein."
+          : "The AI response did not finish in time. Your message is safe; please try again."
+      : "";
+  return message ? `${message} Reference: ${requestId.slice(0, 18)}` : "";
+}
+
 interface AnalysisPageProps {
   document: DocumentData;
   isNew: boolean;
@@ -57,22 +75,22 @@ interface AnalysisPageProps {
 function renderFormattedText(text: string) {
   return text.split("\n").map((line, index) => {
     if (!line.trim()) {
-      return <div key={index} className="legal-response-gap" data-no-i18n />;
+      return <div key={index} className="legal-response-gap" />;
     }
 
     if (line.startsWith("## ")) {
-      return <h3 key={index} data-no-i18n>{line.replace("## ", "")}</h3>;
+      return <h3 key={index}>{line.replace("## ", "")}</h3>;
     }
 
     if (line.startsWith("### ")) {
-      return <h4 key={index} data-no-i18n>{line.replace("### ", "")}</h4>;
+      return <h4 key={index}>{line.replace("### ", "")}</h4>;
     }
 
     if (line.startsWith("- ")) {
-      return <p key={index} className="legal-response-bullet" data-no-i18n>{line.replace("- ", "")}</p>;
+      return <p key={index} className="legal-response-bullet">{line.replace("- ", "")}</p>;
     }
 
-    return <p key={index} data-no-i18n>{line}</p>;
+    return <p key={index}>{line}</p>;
   });
 }
 
@@ -122,26 +140,10 @@ export default function AnalysisPage({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const followUpTextareaRef = useRef<HTMLTextAreaElement>(null);
   const activeRequestIdRef = useRef<string | null>(null);
-  const { planState, estimateUnits, refresh, loading: isPlanStateLoading, error: planStateError } = usePlanState();
-  const { clearSafeError } = useSafeAppError();
+  const { planState, estimateUnits, refresh } = usePlanState();
+  const { showSafeError, clearSafeError } = useSafeAppError();
   const t = (text: string) => translateUiText(text, language);
-  const copy = (key: Parameters<typeof appCopy>[1]) => appCopy(language, key);
   const webPresentation = getAnalysisPageWebPresentation(webConfigured, planState?.entitlements.web);
-  const aiRequestAvailability = getAiRequestAvailability(planState?.entitlements.providerAvailability, requestConfiguration.model);
-  const aiAvailabilityMessage = planStateError
-    ? "We couldn't confirm the AI service status. Refresh and try again."
-    : aiRequestAvailability.message;
-  const isAiRequestBlocked = Boolean(planStateError) || !aiRequestAvailability.available;
-  const canRefreshAiStatus = canRefreshAiRequestStatus({
-    availability: aiRequestAvailability,
-    planStateError,
-    planStateLoading: isPlanStateLoading,
-  });
-  const memoryNotice = document.chatPersistenceStatus
-    ? chatMemoryPersistenceNotice(document.chatPersistenceStatus)
-    : document.contextSummary
-      ? "Earlier messages are retained as a private conversation memory summary."
-      : "";
 
   useEffect(() => {
     if (isNew && hasUploadedFile) setShowOverlay(true);
@@ -160,7 +162,6 @@ export default function AnalysisPage({
     setRequestConfiguration(document.requestConfiguration ?? DEFAULT_REQUEST_CONFIGURATION);
     setWebEnabled(document.webEnabled ?? false);
     setRequestError("");
-    setFailedRequest(null);
   }, [document.id, document.requestConfiguration, document.webEnabled]);
 
   useEffect(() => {
@@ -179,6 +180,7 @@ export default function AnalysisPage({
     setIsThinking(true);
     activeRequestIdRef.current = pending.requestId;
     setRequestError("");
+    clearSafeError(pending.requestId);
     try {
       const chat = await submitLegalChat({
         requestId: pending.requestId,
@@ -232,23 +234,43 @@ export default function AnalysisPage({
       }
       setFailedRequest(pending);
       if (error instanceof BackendApiError) {
-        setRequestError(`${t(chatFailureMessage(error))} ${t("Reference")}: ${error.requestId.slice(0, 18)}`);
+        if (error.presentation === "product") {
+          setRequestError(getAnalysisPageChatFailureMessage(error.kind, error.requestId, language) || `${error.message} Reference: ${error.requestId.slice(0, 18)}`);
+        } else {
+          setRequestError("");
+          showSafeError({
+            referenceId: error.requestId,
+            errorCode: error.code,
+            httpStatus: error.status,
+            routeCategory: "ai",
+            feature: "chat",
+            modelClass: pending.requestConfiguration.model,
+            webEnabled: pending.context.webEnabled === true,
+            ragEnabled: Boolean(pending.context.documentId),
+            planClass: planState?.plan.id ?? "unknown",
+            retry: () => void executeChatRequest(pending),
+          });
+        }
       } else {
-        setRequestError(`${t(chatFailureMessage(error))} ${t("Reference")}: ${pending.requestId.slice(0, 18)}`);
+        setRequestError("");
+        showSafeError({
+          referenceId: pending.requestId,
+          errorCode: "CHAT_ACTION_FAILED",
+          httpStatus: 0,
+          routeCategory: "ai",
+          feature: "chat",
+          modelClass: pending.requestConfiguration.model,
+          webEnabled: pending.context.webEnabled === true,
+          ragEnabled: Boolean(pending.context.documentId),
+          planClass: planState?.plan.id ?? "unknown",
+          retry: () => void executeChatRequest(pending),
+        });
       }
       await refresh();
     } finally {
       if (activeRequestIdRef.current === pending.requestId) activeRequestIdRef.current = null;
       setIsThinking(false);
     }
-  };
-
-  const retryFailedRequest = (mode: "recover" | "restart") => {
-    if (!failedRequest || isThinking) return;
-    const pending = mode === "restart"
-      ? { ...failedRequest, requestId: crypto.randomUUID() }
-      : failedRequest;
-    void executeChatRequest(pending);
   };
 
   const handleSend = async () => {
@@ -266,10 +288,6 @@ export default function AnalysisPage({
         : language === "hinglish"
           ? `${requestConfiguration.model} aapke current plan ya provider configuration mein available nahi hai.`
           : `${requestConfiguration.model} is not available on your current plan or provider configuration.`);
-      return;
-    }
-    if (isAiRequestBlocked) {
-      setRequestError(t(aiAvailabilityMessage ?? "The selected AI service could not complete this request right now."));
       return;
     }
     if (webEnabled && !webPresentation.available) {
@@ -445,13 +463,7 @@ export default function AnalysisPage({
   if (showOverlay) {
     return (
       <ProgressOverlay
-        language={language}
-        stages={[
-          copy("progress.readingInput"),
-          copy("progress.identifyingLegalContext"),
-          copy("progress.preparingAiResponse"),
-          copy("progress.openingConversation"),
-        ]}
+        stages={["Reading input", "Identifying legal context", "Preparing AI response", "Opening conversation"]}
         onComplete={handleComplete}
       />
     );
@@ -464,7 +476,7 @@ export default function AnalysisPage({
       <header className="legal-conversation-header">
         <div>
           <span className="legal-conversation-kicker">{t("Legal Saathi AI workspace")}</span>
-          <h1 data-no-i18n>{document.name}</h1>
+          <h1>{document.name}</h1>
         </div>
         <button type="button" className="legal-conversation-tool" onClick={handleExport} aria-label={language === "hi" ? "बातचीत निर्यात करें" : language === "hinglish" ? "Conversation export karein" : "Export conversation"}>
           <Download size={16} />
@@ -475,10 +487,10 @@ export default function AnalysisPage({
         </div>
       </header>
 
-      <section className="legal-thread" aria-label={copy("conversation.ariaLabel")}>
-        {memoryNotice && (
+      <section className="legal-thread" aria-label="Legal AI conversation">
+        {document.contextSummary && (
           <div className="legal-memory-notice" role="note">
-            {t(memoryNotice)}
+            {t("Earlier messages are retained as a private conversation memory summary.")}
           </div>
         )}
         {document.chatHistory.map((message, index) => (
@@ -487,33 +499,33 @@ export default function AnalysisPage({
               {message.role === "assistant" ? <Sparkles size={18} /> : "You"}
             </div>
             <div className="legal-message-content">
-              {message.role === "assistant" ? renderFormattedText(message.text) : <p data-no-i18n>{message.text}</p>}
+              {message.role === "assistant" ? renderFormattedText(message.text) : <p>{message.text}</p>}
               {message.isSuperseded && <span className="legal-message-version">{language === "hi" ? "पिछला संस्करण" : language === "hinglish" ? "Pichhla version" : "Previous version"}</span>}
               {message.role === "assistant" && message.groundingStatus === "grounded" && (
                 <div className="legal-grounding-status" role="status">{t("Grounded with retrieval, citations and abstention safeguards.")}</div>
               )}
               {message.role === "assistant" && message.agent && (
                 <div className="legal-agent-summary" role="status">
-                  <strong data-no-i18n>{message.agent.publicStatus}</strong>
+                  <strong>{message.agent.publicStatus}</strong>
                   {message.agent.toolSummaries.length > 0 && (
-                    <span data-no-i18n>{message.agent.toolSummaries.map((tool) => tool.replaceAll("_", " ")).join(" · ")}</span>
+                    <span>{message.agent.toolSummaries.map((tool) => tool.replaceAll("_", " ")).join(" · ")}</span>
                   )}
                 </div>
               )}
               {message.role === "assistant" && message.citations && message.citations.length > 0 && (
-                <aside className="legal-message-citations" aria-label={copy("conversation.citationsAriaLabel")}>
+                <aside className="legal-message-citations" aria-label="Official source citations">
                   <strong>{language === "hi" ? "आधिकारिक स्रोत" : language === "hinglish" ? "Adhikarik sources" : "Official sources"}</strong>
                   {message.citations.map((citation) => (
                     citation.url ? (
                       <a className="legal-source-card" key={`${citation.url}:${citation.title}`} href={citation.url} target="_blank" rel="noreferrer noopener">
                         <span className="legal-source-card-meta">
-                          <span data-no-i18n>{citation.authority || citationDomain(citation.url)}</span>
+                          <span>{citation.authority || citationDomain(citation.url)}</span>
                           <ExternalLink size={14} aria-hidden="true" />
                         </span>
-                        <span className="legal-source-card-title" data-no-i18n>{citation.title}</span>
-                        {citation.excerpt && <small data-no-i18n>{citation.excerpt}</small>}
+                        <span className="legal-source-card-title">{citation.title}</span>
+                        {citation.excerpt && <small>{citation.excerpt}</small>}
                         <span className="legal-source-card-foot">
-                          <span data-no-i18n>{citationDomain(citation.url)}</span>
+                          <span>{citationDomain(citation.url)}</span>
                           {citationRetrievedAt(citation.retrievedAt, language) && (
                             <span>{language === "hi" ? "प्राप्त" : language === "hinglish" ? "Mila" : "Retrieved"}: {citationRetrievedAt(citation.retrievedAt, language)}</span>
                           )}
@@ -521,9 +533,9 @@ export default function AnalysisPage({
                       </a>
                     ) : (
                       <div className="legal-private-citation" key={`private:${citation.title}`}>
-                        {citation.authority && <span className="legal-source-card-meta" data-no-i18n>{citation.authority}</span>}
-                        <span className="legal-source-card-title" data-no-i18n>{citation.title}</span>
-                        {citation.excerpt && <small data-no-i18n>{citation.excerpt}</small>}
+                        {citation.authority && <span className="legal-source-card-meta">{citation.authority}</span>}
+                        <span className="legal-source-card-title">{citation.title}</span>
+                        {citation.excerpt && <small>{citation.excerpt}</small>}
                       </div>
                     )
                   ))}
@@ -531,17 +543,17 @@ export default function AnalysisPage({
               )}
               <div className="legal-message-actions">
                 {message.role === "assistant" && (
-                  <button type="button" onClick={() => void handleCopy(message)} aria-label={copy("conversation.copyAnswer")} title={copy("conversation.copyAnswer")}>
+                  <button type="button" onClick={() => void handleCopy(message)} aria-label={language === "hi" ? "उत्तर कॉपी करें" : language === "hinglish" ? "Answer copy karein" : "Copy answer"} title="Copy answer">
                     <Copy size={14} />
                   </button>
                 )}
                 {message.role === "assistant" && index === document.chatHistory.length - 1 && (
-                  <button type="button" disabled={isThinking} onClick={() => void handleRegenerate(index)} aria-label={copy("conversation.regenerateAnswer")} title={copy("conversation.regenerateAnswer")}>
+                  <button type="button" disabled={isThinking} onClick={() => void handleRegenerate(index)} aria-label={language === "hi" ? "उत्तर फिर से बनाएँ" : language === "hinglish" ? "Answer dobara banayein" : "Regenerate answer"} title="Regenerate answer">
                     <RefreshCw size={14} />
                   </button>
                 )}
                 {message.role === "user" && (
-                  <button type="button" disabled={isThinking} onClick={() => handleEdit(index, message.text)} aria-label={copy("conversation.editMessage")} title={copy("conversation.editMessage")}>
+                  <button type="button" disabled={isThinking} onClick={() => handleEdit(index, message.text)} aria-label={language === "hi" ? "संदेश संपादित करें" : language === "hinglish" ? "Message edit karein" : "Edit message"} title="Edit message">
                     <Pencil size={14} />
                   </button>
                 )}
@@ -568,7 +580,7 @@ export default function AnalysisPage({
               <strong>{t("Continue this matter in a Case Workspace")}</strong>
               <span>{t("Move this full conversation and its private memory into a document-aware Case Agent workspace.")}</span>
             </div>
-            <button type="button" className="legal-generate-btn" onClick={handleGenerateDocument}>
+            <button className="legal-generate-btn" onClick={handleGenerateDocument}>
               <Sparkles size={18} />
               {t("Open in Case Workspace")}
             </button>
@@ -600,7 +612,7 @@ export default function AnalysisPage({
           {attachedFile && (
             <div className="legal-chatbar-attachment" role="status">
               <FileText size={15} />
-              <span data-no-i18n>{attachedFile.name}</span>
+              <span>{attachedFile.name}</span>
               <button type="button" onClick={clearAttachedFile} aria-label={t("Remove attached document")}>
                 <X size={14} />
               </button>
@@ -640,23 +652,8 @@ export default function AnalysisPage({
             <div className="legal-chatbar-error" role="alert">
               <span>{requestError}</span>
               {failedRequest && (
-                <div className="legal-chatbar-error-actions">
-                  <button type="button" className="btn" disabled={isThinking} onClick={() => retryFailedRequest("recover")}>
-                    {t("Check previous response")}
-                  </button>
-                  <button type="button" className="btn" disabled={isThinking} onClick={() => retryFailedRequest("restart")}>
-                    {t("Start a new request")}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {isAiRequestBlocked && aiAvailabilityMessage && (
-            <div className="legal-chatbar-note" role="status" aria-live="polite">
-              <span>{t(aiAvailabilityMessage)}</span>
-              {canRefreshAiStatus && (
-                <button type="button" className="btn" disabled={isPlanStateLoading || isThinking} onClick={() => void refresh()}>
-                  {t("Refresh status")}
+                <button type="button" className="btn" disabled={isThinking} onClick={() => void executeChatRequest(failedRequest)}>
+                  {t("Try again")}
                 </button>
               )}
             </div>
@@ -683,7 +680,7 @@ export default function AnalysisPage({
               type="button"
               className="legal-chatbar-send"
               onClick={handleSend}
-              disabled={isAiRequestBlocked || (!inputText.trim() && !attachedFile)}
+              disabled={!inputText.trim() && !attachedFile}
               aria-label={t("Send follow-up message")}
             >
               <Send size={18} />

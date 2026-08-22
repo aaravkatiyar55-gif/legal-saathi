@@ -13,7 +13,6 @@ import {
 } from "@/lib/backendApi";
 import { LegalAiModel, RequestConfiguration } from "@/lib/types";
 import { updateSafeDiagnosticContext } from "@/lib/safeIncident";
-import { loadPlanStateBootstrap } from "@/lib/planStateBootstrap";
 
 export const PLAN_STATE_REFRESH_EVENT = "legal-sathi-plan-state-refresh";
 
@@ -56,23 +55,17 @@ export default function PlanStateProvider({ children }: { children: React.ReactN
     setLoading(true);
     setError("");
     try {
-      const bootstrap = await loadPlanStateBootstrap({
-        getExistingSession: getBackendSession,
-        loadCatalog: getPlansCatalog,
-        restoreSession: async () => {
-          const restored = await restoreBackendSession();
-          return restored ? getBackendSession() : null;
-        },
-        loadUsage: getBackendUsage,
-      });
-      setCatalog(bootstrap.catalog.catalog);
-      if (!bootstrap.session || !bootstrap.usage) {
+      const catalogResult = await getPlansCatalog();
+      setCatalog(catalogResult.catalog);
+      const restoredSession = getBackendSession() ?? (await restoreBackendSession())?.session ?? null;
+      if (!restoredSession) {
         setPlanState(null);
         setUsage(null);
         return;
       }
-      setUsage(bootstrap.usage);
-      setPlanState(bootstrap.usage.planState);
+      const usageResult = await getBackendUsage();
+      setUsage(usageResult);
+      setPlanState(usageResult.planState);
     } catch (refreshError) {
       setError(safeInlineBackendMessage(refreshError, "Plan state could not be refreshed."));
     } finally {

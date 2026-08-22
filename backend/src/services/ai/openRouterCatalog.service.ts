@@ -230,7 +230,19 @@ export function getOpenRouterModelAvailabilitySnapshot() {
 }
 
 export function resolveZeroCostModelId(): string | null {
-  return resolveOpenRouterProductModelId("auto");
+  return resolveZeroCostModelIds(1)[0] ?? null;
+}
+
+export function resolveZeroCostModelIds(limit = 2): string[] {
+  if (cache.status !== "ready") return [];
+  const boundedLimit = Math.max(1, Math.min(2, Math.floor(limit)));
+  return eligibleCatalogModels("auto")
+    .sort((left, right) =>
+      Number(right.supportsTools) - Number(left.supportsTools)
+      || right.contextLength - left.contextLength
+      || compareModelId(left, right))
+    .slice(0, boundedLimit)
+    .map((model) => model.id);
 }
 
 export function resolveOpenRouterPaidFallbackModelId(): string | null {

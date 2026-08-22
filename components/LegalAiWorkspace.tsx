@@ -7,15 +7,13 @@ import {
 import { RequestConfiguration } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 import RequestControls from "./RequestControls";
-import { chatFailureMessage, getWebSearchStatus } from "@/lib/backendApi";
+import { BackendApiError, getWebSearchStatus } from "@/lib/backendApi";
 import { usePlanState } from "./PlanStateProvider";
 import DictationControl from "./DictationControl";
 import { useSafeAppError } from "./AppErrorProvider";
 import AttachmentMenu from "./AttachmentMenu";
 import { translateUiText } from "@/lib/i18n";
-import { appCopy, publicLanguageHref } from "@/lib/i18n/appCopy";
-import { canRefreshAiRequestStatus, getAiRequestAvailability, getAiSubmitAction } from "@/lib/aiRequestAvailability";
-import { getGuidedWorkspaceFlow, getGuidedWorkspacePrompt, GUIDED_WORKSPACE_FLOWS, type GuidedWorkspaceFlowId } from "@/lib/guidedWorkspaceFlows";
+import { getGuidedWorkspaceFlow, GUIDED_WORKSPACE_FLOWS, type GuidedWorkspaceFlowId } from "@/lib/guidedWorkspaceFlows";
 import { getWebResearchAvailability, getWebResearchAvailabilityMessage } from "@/lib/webResearchAvailability";
 
 export type WorkspaceSubmission = {
@@ -27,6 +25,27 @@ export type WorkspaceSubmission = {
   termsAccepted: boolean;
   language: "en" | "hinglish" | "hi";
 };
+
+export function getWorkspaceChatFailureMessage(
+  kind: BackendApiError["kind"],
+  language: "en" | "hinglish" | "hi",
+) {
+  if (kind === "rate_limited") {
+    return language === "hi"
+      ? "AI सेवा अभी व्यस्त है। आपका संदेश सुरक्षित है; थोड़ी देर बाद फिर से प्रयास करें।"
+      : language === "hinglish"
+        ? "AI service abhi busy hai. Aapka message safe hai; thodi der baad dobara try karein."
+        : "The AI service is busy right now. Your message is safe; please try again shortly.";
+  }
+  if (kind === "provider_timeout") {
+    return language === "hi"
+      ? "AI उत्तर समय पर पूरा नहीं कर पाया। आपका संदेश सुरक्षित है; कृपया फिर से प्रयास करें।"
+      : language === "hinglish"
+        ? "AI answer time par complete nahi kar paaya. Aapka message safe hai; dobara try karein."
+        : "The AI response did not finish in time. Your message is safe; please try again.";
+  }
+  return "";
+}
 
 interface LegalAiWorkspaceProps {
   role: "normal" | "lawyer";
@@ -49,24 +68,10 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
   const [webConfigured, setWebConfigured] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
-  const { planState, estimateUnits, refresh, loading: isPlanStateLoading, error: planStateError } = usePlanState();
-  const { clearSafeError } = useSafeAppError();
+  const { planState, estimateUnits, refresh } = usePlanState();
+  const { showSafeError, clearSafeError } = useSafeAppError();
   const t = (text: string) => translateUiText(text, language);
   const webAvailability = getWebResearchAvailability(webConfigured, planState?.entitlements.web);
-  const aiRequestAvailability = isAuthenticated
-    ? getAiRequestAvailability(planState?.entitlements.providerAvailability, requestConfiguration.model)
-    : { available: true, state: "available" as const };
-  const aiAvailabilityMessage = planStateError
-    ? "We couldn't confirm the AI service status. Refresh and try again."
-    : aiRequestAvailability.message;
-  const isAiRequestBlocked = isAuthenticated && (Boolean(planStateError) || !aiRequestAvailability.available);
-  const aiSubmitAction = getAiSubmitAction(isAuthenticated);
-  const aiSubmitLabel = appCopy(language, aiSubmitAction === "sign_in" ? "workspace.continueSecureSignIn" : "workspace.sendLegalPrompt");
-  const canRefreshAiStatus = isAuthenticated && canRefreshAiRequestStatus({
-    availability: aiRequestAvailability,
-    planStateError,
-    planStateLoading: isPlanStateLoading,
-  });
   const webUnavailableMessage = webAvailability === "available"
     ? undefined
     : getWebResearchAvailabilityMessage(webAvailability);
@@ -81,8 +86,7 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
       return;
     }
 
-    const guidedPrompt = getGuidedWorkspacePrompt(flow, language);
-    if (guidedPrompt) setMessage(guidedPrompt);
+    if (flow.prompt) setMessage(flow.prompt);
     if (flow.requestWeb) {
       if (webAvailability === "available") {
         setWebEnabled(true);
@@ -109,6 +113,7 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
   const executeSubmission = async (submission: WorkspaceSubmission) => {
     if (isSubmitting) return;
     setError("");
+    clearSafeError(submission.requestId);
     setIsSubmitting(true);
     try {
       await onStartSession(submission);
@@ -117,7 +122,39 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
       setFailedSubmission(null);
     } catch (submissionError) {
       setFailedSubmission(submission);
-      setError(t(chatFailureMessage(submissionError)));
+      if (submissionError instanceof BackendApiError) {
+        if (submissionError.presentation === "product") {
+          setError(getWorkspaceChatFailureMessage(submissionError.kind, language) || submissionError.message);
+        } else {
+          setError("");
+          showSafeError({
+            referenceId: submissionError.requestId,
+            errorCode: submissionError.code,
+            httpStatus: submissionError.status,
+            routeCategory: "ai",
+            feature: "chat",
+            modelClass: submission.requestConfiguration.model,
+            webEnabled: submission.webEnabled,
+            ragEnabled: Boolean(submission.file),
+            planClass: planState?.plan.id ?? "unknown",
+            retry: () => void executeSubmission(submission),
+          });
+        }
+      } else {
+        setError("");
+        showSafeError({
+          referenceId: submission.requestId,
+          errorCode: "CHAT_ACTION_FAILED",
+          httpStatus: 0,
+          routeCategory: "ai",
+          feature: "chat",
+          modelClass: submission.requestConfiguration.model,
+          webEnabled: submission.webEnabled,
+          ragEnabled: Boolean(submission.file),
+          planClass: planState?.plan.id ?? "unknown",
+          retry: () => void executeSubmission(submission),
+        });
+      }
       await refresh();
     } finally {
       setIsSubmitting(false);
@@ -155,10 +192,6 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
           : `${requestConfiguration.model} is not available on your current plan or provider configuration.`);
       return;
     }
-    if (isAiRequestBlocked) {
-      setError(t(aiAvailabilityMessage ?? "The selected AI service could not complete this request right now."));
-      return;
-    }
     if (webEnabled && webAvailability !== "available") {
       setError(t(webUnavailableMessage ?? "Web research is unavailable in this environment. You can still ask a question without it."));
       return;
@@ -175,14 +208,6 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
 
     setFailedSubmission(null);
     await executeSubmission(submission);
-  };
-
-  const retryFailedSubmission = (mode: "recover" | "restart") => {
-    if (!failedSubmission || isSubmitting) return;
-    const submission = mode === "restart"
-      ? { ...failedSubmission, requestId: crypto.randomUUID() }
-      : failedSubmission;
-    void executeSubmission(submission);
   };
 
   const handleMessageKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -221,11 +246,6 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
       </section>
 
       <form className="legal-ai-composer" onSubmit={handleSubmit}>
-        {!isAuthenticated && (
-          <div className="legal-ai-status" role="status">
-            {appCopy(language, "workspace.guestSignInRequired")}
-          </div>
-        )}
         <div
           className={`legal-ai-upload ${isDragging ? "drag-over" : ""}`}
           onDragOver={(event) => {
@@ -325,7 +345,7 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
             contextCharacters={selectedFile?.size ? Math.min(selectedFile.size, 40_000) : 0}
             language={language}
           />
-          <div className="legal-ai-submit-group" style={{ gridArea: "send", display: "flex", alignItems: "center", gap: "0.4rem", alignSelf: "end" }}>
+          <div className="legal-ai-submit-group">
             <DictationControl
               value={message}
               onChange={(nextMessage) => {
@@ -336,9 +356,9 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
               disabled={isSubmitting}
               onMessage={setError}
             />
-            <button className="legal-ai-submit" type="submit" disabled={isSubmitting || isAiRequestBlocked} aria-label={aiSubmitLabel}>
+            <button className="legal-ai-submit" type="submit" disabled={isSubmitting} aria-label={t("Send legal prompt")}>
               {isSubmitting ? <Loader2 size={18} className="spin" /> : <ArrowUp size={18} />}
-              <span className="sr-only">{aiSubmitLabel}</span>
+              <span className="sr-only">{t("Start analysis")}</span>
             </button>
           </div>
         </div>
@@ -347,23 +367,8 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
           <div className="legal-ai-error" role="alert">
             <span>{error}</span>
             {failedSubmission && (
-              <div className="legal-ai-error-actions">
-                <button type="button" className="btn" disabled={isSubmitting} onClick={() => retryFailedSubmission("recover")}>
-                  {t("Check previous response")}
-                </button>
-                <button type="button" className="btn" disabled={isSubmitting} onClick={() => retryFailedSubmission("restart")}>
-                  {t("Start a new request")}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        {isAiRequestBlocked && aiAvailabilityMessage && (
-          <div className="legal-ai-status" role="status" aria-live="polite">
-            <span>{t(aiAvailabilityMessage)}</span>
-            {canRefreshAiStatus && (
-              <button type="button" className="btn" disabled={isPlanStateLoading || isSubmitting} onClick={() => void refresh()}>
-                {t("Refresh status")}
+              <button type="button" className="btn" disabled={isSubmitting} onClick={() => void executeSubmission(failedSubmission)}>
+                {t("Try again")}
               </button>
             )}
           </div>
@@ -375,7 +380,7 @@ export default function LegalAiWorkspace({ role, onStartSession, isAuthenticated
         {t("Share only what is necessary for your question. Do not include passwords, bank or card details, or government identity numbers.")}
       </p>
       <p className="legal-ai-disclaimer">
-        {t("Legal Saathi provides AI-assisted legal information and may make mistakes. Verify important decisions, documents, and deadlines.")} <a href={publicLanguageHref("/terms", language)} target="_blank" rel="noopener noreferrer">{appCopy(language, "help.terms")}</a> &middot; <a href={publicLanguageHref("/privacy", language)} target="_blank" rel="noopener noreferrer">{appCopy(language, "help.privacy")}</a>
+        {t("Legal Saathi provides AI-assisted legal information and may make mistakes. Verify important decisions, documents, and deadlines.")} <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a> &middot; <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
       </p>
     </div>
   );

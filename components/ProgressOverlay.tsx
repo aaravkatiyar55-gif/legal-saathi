@@ -1,16 +1,13 @@
 "use client";
 import { Loader2, CheckCircle, Circle } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AppLanguage } from "@/lib/i18n";
-import { appCopy } from "@/lib/i18n/appCopy";
 
 interface ProgressOverlayProps {
   stages: string[];
-  language: AppLanguage;
   onComplete: () => void;
 }
 
-export default function ProgressOverlay({ stages, language, onComplete }: ProgressOverlayProps) {
+export default function ProgressOverlay({ stages, onComplete }: ProgressOverlayProps) {
   const [currentStage, setCurrentStage] = useState(0);
 
   useEffect(() => {
@@ -29,10 +26,10 @@ export default function ProgressOverlay({ stages, language, onComplete }: Progre
   }, [currentStage, stages.length, onComplete]);
 
   return (
-    <div className="modal-overlay" role="status" aria-live="polite" aria-busy="true">
+    <div className="modal-overlay">
       <div className="modal-content" style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "400px" }}>
         <Loader2 size={48} className="spin" style={{ color: "var(--accent-primary)", marginBottom: "1.5rem" }} />
-        <h2 style={{ marginBottom: "2rem" }}>{appCopy(language, "progress.analyzingDocument")}</h2>
+        <h2 style={{ marginBottom: "2rem" }}>Analyzing Document...</h2>
         
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}>
           {stages.map((stage, idx) => {

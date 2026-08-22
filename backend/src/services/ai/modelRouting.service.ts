@@ -13,7 +13,7 @@ import {
   getOpenRouterModelAvailabilitySnapshot,
   resolveOpenRouterProductModelId,
   resolveOpenRouterPaidFallbackModelId,
-  resolveZeroCostModelId,
+  resolveZeroCostModelIds,
   type PublicModelConfigurationState,
 } from "./openRouterCatalog.service";
 
@@ -26,6 +26,7 @@ export type ResolvedModelRequest = {
   speed: ProductSpeed;
   maxOutputTokens: number;
   compatibilityFallback: boolean;
+  freeFallbackModelIds?: string[];
   paidFallbackModelId?: string;
   supportsReasoning?: boolean;
 };
@@ -139,6 +140,7 @@ export function resolveModelRequest(input: {
   let resolvedClass: ProductModelClass = selectedClass;
   let providerModelId = "";
   let compatibilityFallback = false;
+  let freeFallbackModelIds: string[] | undefined;
   if (selectedClass === "auto") {
     if (env.openRouterFreeOnly) {
       assertModelAvailable(modelAvailability.auto.state, PRODUCT_MODELS.auto.name);
@@ -147,11 +149,13 @@ export function resolveModelRequest(input: {
       // compatible with the mandatory ZDR policy. Pin this logical request to
       // the catalog's currently verified zero-cost ZDR model while preserving
       // the user-facing Auto product selection.
-      providerModelId = resolveZeroCostModelId() ?? "";
+      const freeModelIds = resolveZeroCostModelIds(2);
+      providerModelId = freeModelIds[0] ?? "";
       if (!hasValue(providerModelId)) {
         throw new ModelRoutingError("MODEL_FREE_UNAVAILABLE", "Auto has no verified zero-cost privacy-eligible model.");
       }
       compatibilityFallback = providerModelId !== env.modelAutoId;
+      freeFallbackModelIds = freeModelIds.slice(1);
     } else {
       const preferred = preferredAutoClass(input);
       const configuredClass = chooseAutoOpenRouterClass(preferred, input.planId);
@@ -194,6 +198,7 @@ export function resolveModelRequest(input: {
     speed,
     maxOutputTokens: Math.max(400, Math.floor(capability.maxOutputTokens * outputMultiplier)),
     compatibilityFallback,
+    freeFallbackModelIds,
     paidFallbackModelId: selectedClass === "auto" ? resolveOpenRouterPaidFallbackModelId() ?? undefined : undefined,
     supportsReasoning,
   };

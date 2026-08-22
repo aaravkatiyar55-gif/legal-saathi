@@ -16,9 +16,8 @@ import {
   RequestConfiguration
 } from "@/lib/types";
 import { getPreviewKind, readTextIfSupported } from "@/lib/fileStorage";
-import { hydrateCaseDocuments } from "@/lib/caseDocumentHydration";
 import { suggestDocumentCategory } from "@/lib/documentCategories";
-import { createBackendCase, deleteAllBackendChats, deleteBackendCase, deleteBackendChat, destroyBackendSession, getBackendCaseDocuments, getBackendCases, getBackendChats, getBackendSession, linkDocumentToCaseOnServer, prepareBackendCaseAnalysis, prepareCaseQuestionOnServer, processDocumentOnServer, restoreBackendCase, restoreBackendChat, restoreBackendSession, safeConsentRequiredEvent, safeInlineBackendMessage, saveBackendLanguage, saveDocumentAnnotationOnServer, submitLegalChat, updateBackendChat, updateDocumentCategoryOnServer, upsertBackendChat, type BackendCase, type BackendCaseDocument, type BackendChat, type ConsentRequirements, type LegalChatResult, type SessionPayload } from "@/lib/backendApi";
+import { createBackendCase, deleteAllBackendChats, deleteBackendCase, deleteBackendChat, destroyBackendSession, getBackendSession, linkDocumentToCaseOnServer, prepareBackendCaseAnalysis, prepareCaseQuestionOnServer, processDocumentOnServer, restoreBackendCase, restoreBackendChat, restoreBackendSession, safeConsentRequiredEvent, safeInlineBackendMessage, saveBackendLanguage, saveDocumentAnnotationOnServer, submitLegalChat, updateBackendChat, updateDocumentCategoryOnServer, upsertBackendChat, type ConsentRequirements, type LegalChatResult, type SessionPayload } from "@/lib/backendApi";
 import { DEFAULT_REQUEST_CONFIGURATION } from "@/lib/requestSettings";
 import { createCaseQuestionChatContext } from "@/lib/caseQuestionContext";
 import RoleSelection from "@/components/RoleSelection";
@@ -39,6 +38,7 @@ import HelpModal from "@/components/HelpModal";
 import PlanHeaderControl from "@/components/PlanHeaderControl";
 import { requestPlanStateRefresh } from "@/components/PlanStateProvider";
 import { isAppLanguage, languageTag, type AppLanguage } from "@/lib/i18n";
+import { workspaceShellMessage } from "@/lib/i18n/workspaceShellMessages";
 import ConsentModal from "@/components/ConsentModal";
 import { compactChatMemory } from "@/lib/chatMemory";
 import { KeyedSerialQueue } from "@/lib/keyedSerialQueue";
@@ -46,6 +46,7 @@ import { decideProtectedAction } from "@/lib/protectedActionGuard";
 import { dispatchSafeAppError } from "@/lib/safeIncident";
 import { completeAuthenticatedHandoff, deriveCompletedAuthState } from "@/lib/authCompletion";
 import { runVerifiedLogout } from "@/lib/authLifecycle";
+import { backendCaseToClient, backendChatToDocument, documentToBackendChat, loadBackendWorkspaceData } from "@/lib/workspaceData";
 
 function requirementsFromSession(session: SessionPayload): ConsentRequirements {
   return {
@@ -85,139 +86,6 @@ function assistantMessageFromChat(chat: LegalChatResult): ChatMessage {
     } : undefined,
   };
 }
-
-const backendCaseToClient = (caseItem: BackendCase): CaseData => ({
-  id: caseItem.id,
-  name: caseItem.title,
-  clientName: caseItem.user_role,
-  description: caseItem.short_summary,
-  typeTag: "Litigation",
-  createdAt: new Date(caseItem.created_at).getTime(),
-  updatedAt: new Date(caseItem.updated_at).getTime(),
-  documentIds: [],
-  documentLoadStatus: "loading",
-  caseQuestions: [],
-  aiAnalysisPending: caseItem.analysis_status === "pending" || caseItem.analysis_status === "failed",
-  preparation: {
-    summary: caseItem.short_summary,
-    facts: caseItem.important_facts || [],
-    timeline: caseItem.important_dates || [],
-    parties: caseItem.parties || [],
-    relief: caseItem.relief_wanted || [],
-    missingInformation: caseItem.missing_information || [],
-    risks: caseItem.risk_flags || [],
-    questionsForUser: caseItem.questions_for_user || [],
-  },
-});
-
-const backendChatToDocument = (chat: BackendChat): DocumentData => {
-  const memory = compactChatMemory(chat.messages, chat.contextSummary);
-  return {
-    id: chat.id,
-    name: chat.title,
-    uploadedAt: new Date(chat.updatedAt).getTime(),
-    chatHistory: memory.recentMessages,
-    contextSummary: memory.contextSummary,
-    caseId: chat.caseId,
-    requestConfiguration: chat.requestConfiguration,
-    webEnabled: chat.webEnabled,
-    pinned: chat.pinned,
-    archived: chat.archived,
-  };
-};
-
-const backendCaseDocumentToClient = (document: BackendCaseDocument): DocumentData => ({
-  id: document.id,
-  name: document.name,
-  uploadedAt: document.uploadedAt,
-  chatHistory: [],
-  caseId: document.caseId,
-  mimeType: document.mimeType,
-  size: document.size,
-  previewKind: getPreviewKind({ name: document.name, type: document.mimeType }),
-  extractedText: document.extractedText,
-  extractionStatus: document.extractionStatus,
-  extractionMessage: document.extractionMessage,
-  caseCategory: document.category,
-  categorySource: document.categorySource,
-  serverBacked: document.contentAvailable,
-  documentQuestions: [],
-  annotations: document.annotations ?? [],
-});
-
-async function loadBackendWorkspaceData() {
-  const caseResult = await getBackendCases();
-  const baseCases = caseResult.cases.map(backendCaseToClient);
-  const [chatResult, documentResults] = await Promise.all([
-    getBackendChats({ limit: 50 }).catch(() => ({ chats: [], nextCursor: null })),
-    Promise.all(baseCases.map(async (caseItem) => {
-      try {
-        const result = await getBackendCaseDocuments(caseItem.id);
-        return { caseId: caseItem.id, documents: result.documents, failed: false };
-      } catch {
-        return { caseId: caseItem.id, documents: [], failed: true };
-      }
-    })),
-  ]);
-  const hydrated = hydrateCaseDocuments(baseCases, documentResults);
-  const caseChatByCaseId = new Map<string, BackendChat>();
-  for (const chat of chatResult.chats) {
-    if (!chat.caseId) continue;
-    const current = caseChatByCaseId.get(chat.caseId);
-    if (!current || new Date(chat.updatedAt).getTime() > new Date(current.updatedAt).getTime()) {
-      caseChatByCaseId.set(chat.caseId, chat);
-    }
-  }
-  const cases = hydrated.cases.map((caseItem) => {
-    const chat = caseChatByCaseId.get(caseItem.id);
-    if (!chat) return caseItem;
-    const memory = compactChatMemory(chat.messages, chat.contextSummary);
-    return {
-      ...caseItem,
-      conversationId: chat.id,
-      conversationHistory: memory.recentMessages,
-      conversationContextSummary: memory.contextSummary,
-      conversationRequestConfiguration: chat.requestConfiguration,
-      conversationWebEnabled: chat.webEnabled,
-    };
-  });
-  const mergedDocuments = new Map<string, DocumentData>();
-  for (const chat of chatResult.chats.map(backendChatToDocument)) {
-    mergedDocuments.set(chat.id, chat);
-  }
-  for (const caseDocument of hydrated.documents.map(backendCaseDocumentToClient)) {
-    const chat = mergedDocuments.get(caseDocument.id);
-    mergedDocuments.set(caseDocument.id, chat ? {
-      ...caseDocument,
-      chatHistory: chat.chatHistory,
-      contextSummary: chat.contextSummary,
-      requestConfiguration: chat.requestConfiguration,
-      webEnabled: chat.webEnabled,
-      pinned: chat.pinned,
-      archived: chat.archived,
-    } : caseDocument);
-  }
-  return {
-    cases,
-    documents: [...mergedDocuments.values()],
-  };
-}
-
-const documentToBackendChat = (document: DocumentData) => {
-  const memory = compactChatMemory(document.chatHistory, document.contextSummary);
-  return {
-    id: document.id,
-    title: document.name,
-    messages: memory.recentMessages,
-    caseId: document.caseId,
-    requestConfiguration: document.requestConfiguration ?? DEFAULT_REQUEST_CONFIGURATION,
-    webEnabled: document.webEnabled ?? false,
-    attachments: document.mimeType ? [{ documentId: document.id, name: document.name, mimeType: document.mimeType, size: document.size ?? 0 }] : [],
-    contextSummary: memory.contextSummary,
-    pinned: document.pinned ?? false,
-    archived: document.archived ?? false,
-  };
-};
 
 type ProtectedAction = () => void | Promise<void>;
 
@@ -1155,6 +1023,7 @@ export default function Home() {
   const activeDoc = activeDocId ? documents.find(d => d.id === activeDocId) : null;
   const activeCase = activeCaseId ? cases.find(c => c.id === activeCaseId) : null;
   const isCaseWorkspaceOpen = activeView === "case_workspace" && !!activeCase;
+  const shellCopy = (key: Parameters<typeof workspaceShellMessage>[1]) => workspaceShellMessage(language, key);
 
   return (
     <div className="app-layout">
@@ -1195,17 +1064,17 @@ export default function Home() {
         <button
           className="sidebar-mobile-backdrop"
           type="button"
-          aria-label="Close navigation"
+          aria-label={shellCopy("shell.navigation.close")}
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
       
-      <main className="main-content" style={{ position: "relative" }}>
+      <main className="main-content">
         {/* Language stays on the left; account and plan state stay compact on the right. */}
         {!isCaseWorkspaceOpen && (
           <div className="app-topbar">
             <div className="app-language-control">
-              <label htmlFor="app-language">Language</label>
+              <label htmlFor="app-language">{shellCopy("shell.language")}</label>
               <select id="app-language" value={language} onChange={(event) => handleLanguageChange(event.target.value as AppLanguage)}>
                 <option value="en">English</option>
                 <option value="hinglish">Hinglish</option>
@@ -1227,10 +1096,7 @@ export default function Home() {
                 }}
                 isAdminEligible={isAdminEligible}
               />
-              <PlanHeaderControl
-                language={language}
-                onOpenPlans={() => { setPricingMode("plans"); setIsPricingOpen(true); }}
-              />
+              <PlanHeaderControl onOpenPlans={() => { setPricingMode("plans"); setIsPricingOpen(true); }} />
             </div>
           </div>
         )}
@@ -1239,10 +1105,9 @@ export default function Home() {
           <button
             className="btn mobile-sidebar-open"
             type="button"
-            aria-label="Open navigation"
-            title="Open navigation"
+            aria-label={shellCopy("shell.navigation.open")}
+            title={shellCopy("shell.navigation.openTitle")}
             onClick={() => setIsSidebarOpen(true)}
-            style={{ position: "absolute", top: "1.5rem", left: "1.5rem", zIndex: 50, padding: "0.5rem" }}
           >
             <PanelLeft size={20} />
           </button>
@@ -1306,7 +1171,6 @@ export default function Home() {
 
       <CreateCaseModal 
         isOpen={isCreateCaseModalOpen} 
-        language={language}
         onClose={() => setIsCreateCaseModalOpen(false)} 
         onCreateCase={handleCreateCase}
         onViewExistingCases={() => { setIsCreateCaseModalOpen(false); handleOpenCaseHub(); }}
@@ -1329,7 +1193,6 @@ export default function Home() {
       />
       <AuthModal
         isOpen={isAuthModalOpen}
-        language={language}
         onClose={() => {
           setIsAuthModalOpen(false);
           clearPendingProtectedAction();
@@ -1339,7 +1202,6 @@ export default function Home() {
       />
       <PricingModal
         isOpen={isPricingOpen}
-        language={language}
         mode={pricingMode}
         onClose={() => setIsPricingOpen(false)}
         onRequireSignIn={() => {

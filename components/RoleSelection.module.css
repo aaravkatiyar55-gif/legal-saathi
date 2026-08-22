@@ -1,0 +1,206 @@
+.shell {
+  --entry-ink: var(--workspace-ink);
+  --entry-muted: var(--workspace-muted);
+  --entry-rule: rgba(202, 166, 99, 0.28);
+  --entry-accent: var(--workspace-accent);
+  --entry-surface: rgba(16, 28, 40, 0.88);
+
+  min-height: 100dvh;
+  overflow-y: auto;
+  padding: clamp(2.25rem, 6vw, 5rem) 1rem 3rem;
+  color: var(--entry-ink);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 27, 0.96), rgba(7, 13, 20, 1)),
+    var(--workspace-canvas);
+}
+
+:global(html[data-theme="light"]) .shell {
+  --entry-rule: rgba(138, 101, 38, 0.28);
+  --entry-surface: rgba(255, 255, 255, 0.94);
+
+  background:
+    linear-gradient(180deg, rgba(250, 248, 240, 0.95), rgba(245, 247, 251, 1)),
+    var(--workspace-canvas);
+}
+
+.content {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.header {
+  max-width: 44rem;
+  text-align: left;
+}
+
+.heading {
+  margin: 0;
+  letter-spacing: -0.04em;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 0.98;
+}
+
+.byline {
+  margin: 0.75rem 0 0;
+  color: var(--entry-accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intro {
+  max-width: 39rem;
+  margin: 1.1rem 0 0;
+  color: var(--entry-muted);
+  font-size: 1.06rem;
+  line-height: 1.6;
+}
+
+.languageControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 2.25rem;
+  color: var(--entry-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.languageControl select {
+  min-height: 2.5rem;
+  border: 1px solid var(--entry-rule);
+  border-radius: 5px;
+  padding: 0.35rem 0.65rem;
+  color: var(--entry-ink);
+  background: rgba(8, 15, 23, 0.8);
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+:global(html[data-theme="light"]) .languageControl select {
+  background: var(--workspace-surface);
+}
+
+.languageControl select:focus-visible,
+.roleCard:focus-visible,
+.footer a:focus-visible {
+  outline: 2px solid #f6dda5;
+  outline-offset: 3px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.roleCard {
+  position: relative;
+  min-height: 15rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  overflow: hidden;
+  border: 1px solid rgba(193, 209, 221, 0.2);
+  border-radius: 6px;
+  color: var(--entry-ink);
+  background: var(--entry-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+:global(html[data-theme="light"]) .roleCard {
+  border-color: var(--workspace-rule);
+  background: var(--entry-surface);
+}
+
+.roleCard::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--entry-accent);
+  content: "";
+  opacity: 0.62;
+  transition: opacity var(--transition-fast);
+}
+
+.roleCard:hover {
+  border-color: rgba(223, 192, 130, 0.72);
+  background: rgba(20, 34, 48, 0.96);
+  transform: translateY(-3px);
+}
+
+:global(html[data-theme="light"]) .roleCard:hover {
+  background: #ffffff;
+}
+
+.roleCard:hover::before,
+.roleCard:focus-visible::before {
+  opacity: 1;
+}
+
+.roleCard svg {
+  color: var(--entry-accent);
+}
+
+.roleCard h2 {
+  max-width: 18ch;
+  margin: 1.2rem 0 0;
+  font-size: clamp(1.25rem, 2.5vw, 1.55rem);
+  line-height: 1.14;
+}
+
+.roleCard p {
+  max-width: 33rem;
+  margin: 0.75rem 0 0;
+  color: var(--entry-muted);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.footer {
+  max-width: 52rem;
+  margin: 2.5rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--entry-rule);
+  color: var(--entry-muted);
+  font-size: 0.84rem;
+  line-height: 1.58;
+}
+
+.footer p + p {
+  margin-top: 0.55rem;
+}
+
+.footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.footer a {
+  color: #f0d59b;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding-top: 2rem;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .roleCard {
+    min-height: 0;
+  }
+}

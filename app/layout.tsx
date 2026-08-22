@@ -4,8 +4,8 @@ import PlanStateProvider from "@/components/PlanStateProvider";
 import AppErrorProvider from "@/components/AppErrorProvider";
 
 export const metadata: Metadata = {
-  title: "Legal Saathi - Your AI Legal Companion",
-  description: "An Indian legal-information workspace for preparing questions and understanding safer next steps in English, Hindi, and Hinglish.",
+  title: "Legal Saathi | India-focused legal information and preparation",
+  description: "An India-focused workspace for legal information, document understanding, and case preparation. Legal Saathi does not provide legal representation.",
 };
 
 export default function RootLayout({
