@@ -39,7 +39,9 @@ The server is responsible for identity, ownership checks, quota enforcement, sen
 ```powershell
 npm.cmd ci
 npm.cmd --prefix backend ci
-npm.cmd run dev
+npm.cmd run dev:web
+# In a second terminal:
+npm.cmd run dev:backend
 ```
 
 - Web app: `http://localhost:3001`
@@ -52,7 +54,8 @@ Use only synthetic data in local or hosted tests. Never put real legal files, go
 ```powershell
 npm.cmd run typecheck
 npm.cmd run lint
-npm.cmd run build
+npm.cmd run build:web
+npm.cmd run build:backend
 ```
 
 Focused product and safety contracts live in `lib/`, `components/`, `backend/src/`, and `scripts/`. Passing local checks proves source behavior only; it does not prove hosted AI, identity, payments, storage, or provider configuration.
@@ -65,15 +68,9 @@ Development has used AI assistance. Product decisions, integration, testing, and
 
 ## Public-source status
 
-This repository is intentionally private while operational material and history are reviewed. A separate allowlisted public-source candidate can be prepared locally without making this repository public:
+This is the public, allowlisted source snapshot of Legal Saathi. It includes the application source and dependency lockfiles; credentials, operational runbooks, and private deployment material are excluded. Some operational scripts named in `package.json` belong to the private working repository and are not included here.
 
-```powershell
-npm.cmd run public-source:check
-npm.cmd run public-source:prepare
-npm.cmd run public-source:verify
-```
-
-The generator refuses uncommitted source, omits secrets and operational material, and does not publish anything. Read [Public-source package policy](docs/PUBLIC_SOURCE_PACKAGE.md), [Public-source audit](docs/PUBLIC_SOURCE_AUDIT.md), and [third-party attribution inventory](docs/THIRD_PARTY_ATTRIBUTION.md) before any publication decision.
+Read [Public-source package policy](docs/PUBLIC_SOURCE_PACKAGE.md), [Public-source audit](docs/PUBLIC_SOURCE_AUDIT.md), and [third-party attribution inventory](docs/THIRD_PARTY_ATTRIBUTION.md) for the snapshot's scope. Publishing a source update does not by itself deploy the live service.
 
 ## Operational references
 

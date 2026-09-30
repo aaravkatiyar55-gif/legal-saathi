@@ -5,8 +5,10 @@
   --entry-accent: var(--workspace-accent);
   --entry-surface: rgba(16, 28, 40, 0.88);
 
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: clamp(2.25rem, 6vw, 5rem) 1rem 3rem;
   color: var(--entry-ink);
   background:
