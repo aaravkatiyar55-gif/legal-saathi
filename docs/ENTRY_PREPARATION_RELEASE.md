@@ -17,10 +17,12 @@ The Google sign-in message no longer says the provider is available when readine
 
 Run typecheck, lint, frontend/backend builds and the entry contracts before deployment. `lib/preparationNote.test.ts` checks whitespace, multiline Hindi, omitted empty sections, and literal plain-text handling of markup. It does not prove a browser download by itself.
 
+The production walkthrough was checked with fictional input on 30 September. Browser developer events confirmed `legal-saathi-preparation.txt` finished downloading: 429 of 429 bytes, final state `completed`. The high-level browser download helper timed out, so completion was established through the browser's actual download events. Downloaded-file contents were not inspected in that live check; formatting has separate source tests.
+
 ## Assistance and remaining boundaries
 
 Codex assisted with these changes, the tests and documentation. This update does not claim the student invented the added features independently, rewrite the application's authorship history, or establish a particular AI-use percentage. The Stardance eligibility condition is excluded from this requested work.
 
-Hosted Google sign-in still needs provider investigation; the owner requested no Supabase login. Account-only chat, document, AI and payment flows need separate authenticated tests. Local checks and public preparation-tool checks must not be used as proof that those flows work.
+Hosted Google sign-in still needs provider investigation. The frontend's public configured Supabase hostname returned NXDOMAIN, while Google provider readiness remained false. The intended existing account login is now authorized, but access to its dashboard has not yet been completed. This does not establish that the backend uses the same hostname or that the project is paused or deleted. Account-only chat, document, AI and payment flows need separate authenticated tests. Local checks and public preparation-tool checks must not be used as proof that those flows work.
 
 Deployment identifiers and screenshot evidence are recorded in the task's shipping report after hosted verification. A source commit alone is not a deployed release.

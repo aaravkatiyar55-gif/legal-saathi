@@ -70,6 +70,8 @@ The Next.js frontend talks to the Express backend through a same-origin BFF. Ser
 
 See [the entry-page release notes](docs/ENTRY_PREPARATION_RELEASE.md) and [the earlier scroll fix](docs/ENTRY_SCROLL_FIX.md) for the exact changes and validation. GitHub source and live deployment are checked separately.
 
+The public preparation-note download completed in the production browser walkthrough on 30 September 2026 using fictional details. The release notes distinguish that browser evidence from the formatter tests and authenticated product checks.
+
 Google provider readiness was false in the hosted configuration check on 30 September 2026. Its underlying provider configuration has not been changed, and live Google sign-in is not claimed as verified. Saved chats, uploads, AI responses and payments need their own authenticated end-to-end evidence before they are claimed as ship-ready.
 
 ## About this repository
