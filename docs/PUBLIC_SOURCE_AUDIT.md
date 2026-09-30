@@ -1,26 +1,21 @@
 # Public Source Audit
 
-## Decision
+This public repository is a source snapshot assembled from an explicit allowlist. The operational repository and its private history are separate.
 
-**Verdict: sanitizable, but the existing repository must remain private for now.**
+## Current snapshot
 
-This is a tracked-path and configuration audit only. It did not read secret values, local `.env` files, cookies, account data, or provider credentials.
+- Application source, focused tests and dependency lockfiles are included.
+- An MIT licence is present in `LICENSE`; third-party notes are in `THIRD_PARTY_ATTRIBUTION.md`.
+- Environment files, deployment metadata, credential-related migrations, runtime data and private QA artifacts are excluded from the public package.
+- `node scripts/verify-public-source-package.mjs --check` validates the allowlist and scans the candidate for known secret markers. It is a bounded check, not a guarantee that every possible secret format is detectable.
+- No local credential values, cookies, account data or provider settings were read for this documentation update.
 
-## Findings
+## Historical reason for using a snapshot
 
-- `.gitignore` and `.vercelignore` exclude local environment files, dependency folders, runtime stores, `.vercel`, and common key-file patterns.
-- The tracked tree contains a large history of `qa/reports/**` artifacts. These are not appropriate for an initial public source release without a separate review for personal, environment, or operational information.
-- A tracked migration path is named `database/migrations/20260728_admin_credentials_production.sql`. Its presence requires a focused security and IP review before any public release, even though this audit did not inspect or expose its contents.
-- No `LICENSE` file is present, so the public sharing license and ownership terms are unresolved.
-- The product source contains security, payment, authentication, document, and deployment material. A public source release needs an allowlist review, not a blanket repository visibility change.
+The original operational repository contained QA report history and credential-related migration paths. Its initial audit also found no sharing licence at that time. Those findings applied to that earlier private repository, not to the current published snapshot.
 
-## Safe public-source path
+Do not change the operational repository's visibility to update this source. Review and publish only the exact allowlisted files. Keep credentials, generated evidence and private operational material out of commits.
 
-1. Keep this existing repository private.
-2. Create a new, clean public-source branch or repository from an explicit allowlist of application source, test fixtures, documentation, and safe configuration examples.
-3. Exclude environment files, runtime data, QA reports, generated outputs, security-audit artifacts, operational runbooks that reveal internal topology, credential-related migrations, and copied third-party material unless their licence and disclosure are confirmed.
-4. Add a licence selected by the owner and an attribution/IP inventory.
-5. Run a focused secret scan and human review on the exact public candidate.
-6. Only then request owner approval to publish that new public-source version.
+## Release evidence
 
-Until those steps are completed, the truthful Stardance status is **private source under public-source preparation**, not public repository ready.
+A successful source scan proves the candidate passed the defined checks. GitHub publication, deployment, live provider behavior and Stardance approval are separate outcomes. Record each honestly in the release report.

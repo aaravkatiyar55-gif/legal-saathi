@@ -4,6 +4,7 @@ import { publicEntryMessage } from "@/lib/i18n/publicEntryMessages";
 import LegalCaseJourney from "./LegalCaseJourney";
 import LegalClaritySprint from "./LegalClaritySprint";
 import LegalPreparationCompass from "./LegalPreparationCompass";
+import PreparationNote, { preparationNoteCopy } from "./PreparationNote";
 import styles from "./RoleSelection.module.css";
 
 interface RoleSelectionProps {
@@ -14,6 +15,7 @@ interface RoleSelectionProps {
 
 export default function RoleSelection({ onSelectRole, language, onLanguageChange }: RoleSelectionProps) {
   const copy = (key: Parameters<typeof publicEntryMessage>[1]) => publicEntryMessage(language, key);
+  const tools = preparationNoteCopy[language];
 
   return (
     <main className={styles.shell}>
@@ -55,9 +57,16 @@ export default function RoleSelection({ onSelectRole, language, onLanguageChange
           </button>
         </section>
 
-        <LegalPreparationCompass language={language} />
-        <LegalClaritySprint language={language} />
-        <LegalCaseJourney language={language} />
+        <nav className={styles.tools} aria-label={tools.nav}>
+          <a href="#prepare">01 / {tools.checklist}</a>
+          <a href="#clarity">02 / {tools.exercise}</a>
+          <a href="#journey">03 / {tools.journey}</a>
+          <a href="#note">04 / {tools.note}</a>
+        </nav>
+        <div id="prepare" className={styles.toolSection}><LegalPreparationCompass language={language} /></div>
+        <div id="clarity" className={styles.toolSection}><LegalClaritySprint language={language} /></div>
+        <div id="journey" className={styles.toolSection}><LegalCaseJourney language={language} /></div>
+        <div id="note" className={styles.toolSection}><PreparationNote language={language} /></div>
 
         <footer className={styles.footer}>
           <p>{copy("entry.boundary")}</p>

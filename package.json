@@ -13,6 +13,7 @@
     "start": "node scripts/start-production.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:entry": "node backend/node_modules/tsx/dist/cli.mjs --test lib/preparationNote.test.ts lib/legalPreparationCompass.test.ts lib/legalClaritySprint.test.ts lib/i18n/publicEntryMessages.test.ts",
     "security:scan": "node scripts/security-scan.mjs",
     "security:test:ownership": "node scripts/security-test-ownership.mjs",
     "security:test:production-gate": "node scripts/security-test-production-gate.mjs",

@@ -308,7 +308,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
                 Retry Google sign-in
               </button>
             )}
-            {googleClientId && supabaseConfigured && !googleProviderReady && <span className="text-secondary" style={{ display: "block", marginTop: ".45rem", fontSize: ".82rem" }}>Google sign-in is available, but the identity provider has not confirmed its hosted configuration yet.</span>}
+            {googleClientId && supabaseConfigured && !googleProviderReady && <span className="text-secondary" style={{ display: "block", marginTop: ".45rem", fontSize: ".82rem" }}>Google sign-in could not be confirmed by the identity provider. If it fails, try an available email sign-in option below.</span>}
             {!googleClientId && supabaseConfigured && <span className="text-secondary" style={{ display: "block", marginTop: ".45rem", fontSize: ".82rem" }}>Google sign-in needs local client configuration. Verified email sign-in remains available.</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", color: "var(--text-secondary)", fontSize: ".86rem" }}><div style={{ flex: 1, height: 1, background: "var(--border-default)" }} /><span>OR</span><div style={{ flex: 1, height: 1, background: "var(--border-default)" }} /></div>

@@ -1,6 +1,6 @@
 # Public-source package policy
 
-The existing Legal Saathi repository remains private. It contains operational material and history that have not been cleared for public distribution.
+This repository is the public, allowlisted Legal Saathi source snapshot. The separate operational repository and its private history are not included here.
 
 `npm run public-source:check` validates the explicit source allowlist. After a reviewed release has been committed and the working tree is clean, `npm run public-source:prepare` can assemble a separate, ignored `.public-source-package/` directory. It does not create a GitHub repository, push, change visibility, deploy, or publish anything.
 
@@ -22,4 +22,4 @@ The existing Legal Saathi repository remains private. It contains operational ma
 
 ## Publication gate
 
-The generated directory is a candidate, not an automatically publishable repository. Before publishing it, the owner must review the exact package, confirm licensing and IP ownership, run the package verifier, and make a separate intentional publication decision. The public repository must point to the same reviewed release as the public demo and README.
+The packaging script does not publish anything. Future source updates need review of the exact files, licence and attribution, and a clean verification result before publication. Public release notes should identify which source update has been deployed and what was actually checked.

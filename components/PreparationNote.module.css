@@ -1,0 +1,14 @@
+.note { margin-top: 2rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--entry-rule); border-top: 4px solid var(--entry-accent); background: var(--entry-surface); border-radius: 4px; }
+.number { color: var(--entry-accent); font-family: monospace; font-size: 0.85rem; }
+.note h2 { margin: 0.6rem 0; font-size: clamp(1.4rem, 3vw, 1.9rem); }
+.note p { max-width: 70ch; line-height: 1.65; color: var(--entry-muted); }
+.privacy { padding: 0.85rem 1rem; border-left: 2px solid var(--entry-accent); background: var(--workspace-canvas); font-size: 0.85rem; }
+.fields { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
+.fields label { display: grid; gap: 0.5rem; font-size: 0.95rem; font-weight: 600; }
+.fields textarea { width: 100%; min-height: 6rem; resize: vertical; border: 1px solid var(--entry-rule); border-radius: 4px; padding: 0.8rem; background: var(--workspace-canvas); color: var(--entry-ink); font: inherit; font-weight: 400; line-height: 1.5; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }
+.actions button { min-height: 44px; padding: 0.65rem 1rem; border: 1px solid var(--entry-rule); border-radius: 4px; background: var(--workspace-canvas); color: var(--entry-ink); font: inherit; cursor: pointer; }
+.actions button:first-child { background: var(--entry-accent); color: #111c26; font-weight: 700; }
+.actions button:disabled { opacity: 0.5; cursor: default; }
+.actions button:focus-visible, .fields textarea:focus-visible { outline: 2px solid var(--entry-accent); outline-offset: 3px; }
+.status { min-height: 1.5rem; font-size: 0.85rem; margin-bottom: 0; }

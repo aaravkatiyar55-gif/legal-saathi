@@ -28,6 +28,8 @@ const allowlist = [
   ["scripts/start-production.mjs", "scripts/start-production.mjs"],
   ["scripts/verify-public-source-package.mjs", "scripts/verify-public-source-package.mjs"],
   ["docs/ARCHITECTURE.md", "docs/ARCHITECTURE.md"],
+  ["docs/ENTRY_SCROLL_FIX.md", "docs/ENTRY_SCROLL_FIX.md"],
+  ["docs/ENTRY_PREPARATION_RELEASE.md", "docs/ENTRY_PREPARATION_RELEASE.md"],
   ["docs/PUBLIC_SOURCE_AUDIT.md", "docs/PUBLIC_SOURCE_AUDIT.md"],
   ["docs/PUBLIC_SOURCE_PACKAGE.md", "docs/PUBLIC_SOURCE_PACKAGE.md"],
   ["docs/THIRD_PARTY_ATTRIBUTION.md", "docs/THIRD_PARTY_ATTRIBUTION.md"],

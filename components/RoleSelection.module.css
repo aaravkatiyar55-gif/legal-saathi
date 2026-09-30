@@ -9,11 +9,9 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding: clamp(2.25rem, 6vw, 5rem) 1rem 3rem;
+  padding: clamp(2rem, 4vw, 3rem) 1rem 3rem;
   color: var(--entry-ink);
-  background:
-    linear-gradient(180deg, rgba(10, 18, 27, 0.96), rgba(7, 13, 20, 1)),
-    var(--workspace-canvas);
+  background: var(--workspace-canvas);
 }
 
 :global(html[data-theme="light"]) .shell {
@@ -33,6 +31,8 @@
 .header {
   max-width: 44rem;
   text-align: left;
+  border-left: 4px solid var(--entry-accent);
+  padding-left: 1.25rem;
 }
 
 .heading {
@@ -103,7 +103,7 @@
 
 .roleCard {
   position: relative;
-  min-height: 15rem;
+  min-height: 12rem;
   padding: clamp(1.4rem, 3vw, 2rem);
   overflow: hidden;
   border: 1px solid rgba(193, 209, 221, 0.2);
@@ -192,6 +192,11 @@
   color: #f0d59b;
   text-underline-offset: 0.2em;
 }
+
+.tools { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 2rem; padding: 1rem 0; border-top: 1px solid var(--entry-rule); border-bottom: 1px solid var(--entry-rule); }
+.tools a { display: inline-flex; align-items: center; min-height: 44px; color: var(--entry-ink); text-decoration: underline; text-underline-offset: 0.25em; font-size: 0.85rem; }
+.tools a:focus-visible { outline: 2px solid var(--entry-accent); outline-offset: 3px; }
+.toolSection { scroll-margin-top: 1rem; }
 
 @media (max-width: 720px) {
   .shell {

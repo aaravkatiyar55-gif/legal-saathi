@@ -1,77 +1,81 @@
 # Legal Saathi
 
-Legal Saathi is an India-focused workspace for general legal information and case preparation. It helps a person frame a question, organise facts and documents they choose to save, and prepare an editable brief for a qualified advocate.
+Legal Saathi helps people in India put a legal question into words and organise the facts before speaking to an advocate. The interface supports English, Hindi and Hinglish.
 
-**It is not a law firm, legal representation, or a substitute for urgent official help.** It does not automatically file, send, pay, publish, contact another party, or act for a user.
+[Open the live demo](https://legalsaathi-india.vercel.app/) · [How the application is structured](docs/ARCHITECTURE.md)
 
-## Demo
+## Try it without an account
 
-[Open the live Legal Saathi demo](https://legalsaathi-india.vercel.app/)
+Start on the entry page. You can:
 
-The live service and this branch are verified separately. A local change is not a live-feature claim until the exact reviewed commit is deployed and checked.
+1. Pick a situation in the preparation checklist: a purchase, rental disagreement, delayed salary or agreement review.
+2. Work through three short clarity questions about records and context.
+3. Read the case journey to understand the preparation steps.
+4. Write dates, records and one question in **Make a note before you ask**, then download a plain-text preparation note.
 
-## What a first-time user can do
+The note tool runs in the browser. It does not send the note to AI, store it in the account, or autosave it. Reloading or leaving the page loses the note; a downloaded file stays on your device. Use fictional details when trying the demo.
 
-- Choose a public legal-help or legal-professional preparation path.
-- Use English, Hindi, or Hinglish interface copy.
-- Try a private preparation checklist and short legal-literacy exercise before entering the workspace.
-- Frame a general legal question with privacy guidance and clear limits.
-- Review public Terms, Privacy, Support, and legal-information boundaries.
+Numbered links take you straight to each tool. You can switch languages while working without resetting the checklist or note. The public and professional role choices remain available for entering the workspace.
 
-Authenticated features—including saved chats, case records, document processing, AI responses, Web citations, plan state, and payments—need their own synthetic-data verification before they are described as live in a public demo or submission.
+## What it can and cannot do
 
-## Architecture at a glance
+The broader application has account, chat, document and case-workspace code. Those flows depend on separately configured identity, storage, AI and payment services. A working entry page does not prove all those integrations.
 
-```text
-Next.js user interface + same-origin BFF
-                 |
-                 v
-          Express API services
-                 |
-                 v
-Configured identity, storage, retrieval, AI, and payment providers
-```
+Legal Saathi is for general information and preparation. It is not a law firm or legal representation. It does not file a case, contact another party, send a document or make a payment on your behalf. AI responses can be incomplete or wrong; get qualified advice before taking legal action. For urgent situations, use appropriate official help.
 
-The server is responsible for identity, ownership checks, quota enforcement, sensitive-data handling, and payment verification. Missing configuration fails safely rather than inventing a successful result. See [Architecture](docs/ARCHITECTURE.md) for the detailed boundary map.
+## Run the source
 
-## Local quick start
+Use Node.js 24 and npm. Install dependencies from both lockfiles:
 
 ```powershell
-npm.cmd ci
-npm.cmd --prefix backend ci
+npm.cmd ci --ignore-scripts
+npm.cmd --prefix backend ci --ignore-scripts
 npm.cmd run dev:web
-# In a second terminal:
+```
+
+The website opens at `http://localhost:3001`. In another terminal, start the API if you need to test configured backend flows:
+
+```powershell
 npm.cmd run dev:backend
 ```
 
-- Web app: `http://localhost:3001`
-- Backend health endpoint: `http://localhost:8000/health`
+The backend health endpoint is `http://localhost:8000/health`. The public preparation tools work without an account. Protected features need the corresponding environment configuration; do not reuse credentials from another project.
 
-Use only synthetic data in local or hosted tests. Never put real legal files, government IDs, bank details, passwords, provider keys, or payment details into test flows.
-
-## Checks
+## Check a change
 
 ```powershell
 npm.cmd run typecheck
 npm.cmd run lint
 npm.cmd run build:web
 npm.cmd run build:backend
+npm.cmd run test:entry
 ```
 
-Focused product and safety contracts live in `lib/`, `components/`, `backend/src/`, and `scripts/`. Passing local checks proves source behavior only; it does not prove hosted AI, identity, payments, storage, or provider configuration.
+Before deploying an entry-page change, also try a narrow mobile screen, keyboard navigation, all three languages, note download, and the Terms/Privacy links at the bottom. Use synthetic data for every test.
 
-## AI and legal-information limits
+## Find the relevant code
 
-Legal Saathi may use configured AI and retrieval providers to prepare general legal-information responses. AI output can be incomplete or wrong, may not reflect the latest law, and needs qualified professional review before legal action. The interface should preserve drafts and show an honest error or availability state when a provider cannot complete a request.
+| Area | Location |
+| --- | --- |
+| Entry page, roles and navigation | `components/RoleSelection.tsx` and its CSS module |
+| Private note tool | `components/PreparationNote.tsx`, `lib/preparationNote.ts` |
+| Checklist and clarity exercise | `components/LegalPreparationCompass.tsx`, `components/LegalClaritySprint.tsx` |
+| Translations | `lib/i18n/` |
+| Same-origin API boundary | `app/api/legal-sathi/`, `lib/server/` |
+| Authentication and API services | `backend/src/` |
 
-Development has used AI assistance. Product decisions, integration, testing, and factual documentation must remain reviewable and must not be represented as someone else's work.
+The Next.js frontend talks to the Express backend through a same-origin BFF. Server code owns identity checks, quotas, payments and sensitive-data handling. Missing configuration should produce an honest availability error rather than a fake success.
 
-## Public-source status
+## Release notes and current limits
 
-This is the public, allowlisted source snapshot of Legal Saathi. It includes the application source and dependency lockfiles; credentials, operational runbooks, and private deployment material are excluded. Some operational scripts named in `package.json` belong to the private working repository and are not included here.
+See [the entry-page release notes](docs/ENTRY_PREPARATION_RELEASE.md) and [the earlier scroll fix](docs/ENTRY_SCROLL_FIX.md) for the exact changes and validation. GitHub source and live deployment are checked separately.
 
-Read [Public-source package policy](docs/PUBLIC_SOURCE_PACKAGE.md), [Public-source audit](docs/PUBLIC_SOURCE_AUDIT.md), and [third-party attribution inventory](docs/THIRD_PARTY_ATTRIBUTION.md) for the snapshot's scope. Publishing a source update does not by itself deploy the live service.
+Google provider readiness was false in the hosted configuration check on 30 September 2026. Its underlying provider configuration has not been changed, and live Google sign-in is not claimed as verified. Saved chats, uploads, AI responses and payments need their own authenticated end-to-end evidence before they are claimed as ship-ready.
 
-## Operational references
+## About this repository
 
-The private working repository keeps deployment, payment, migration, incident, rollback, and protected-flow runbooks in `docs/`. They are intentionally not included in the public-source candidate until a separate operational and security review clears the exact material. Their presence is not a claim that every protected integration has been verified on the current live release.
+This is the public, allowlisted source snapshot. Credentials and private operational runbooks are excluded. Some inherited operational commands in `package.json` refer to private scripts; use the public commands above for this snapshot.
+
+[Source package policy](docs/PUBLIC_SOURCE_PACKAGE.md) · [Source audit](docs/PUBLIC_SOURCE_AUDIT.md) · [Third-party attribution](docs/THIRD_PARTY_ATTRIBUTION.md)
+
+AI assistance was used in development, testing and documentation, including this entry-page update. The source and test evidence are available for review. This README does not claim an AI-percentage limit has been met or that Stardance has approved the project.
